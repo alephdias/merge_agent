@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: merge-agent-backend
+    env: node
+    region: oregon
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # As demais variáveis (DATABASE_URL, JWT_SECRET, etc.)
+      # devem ser adicionadas manualmente no painel do Render → Environment.
+      # Não as coloque aqui pois este arquivo vai para o repositório.
