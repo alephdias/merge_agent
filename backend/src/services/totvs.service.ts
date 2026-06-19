@@ -53,13 +53,6 @@ export async function uploadTotvs(
     hash: fileHash,
   });
 
-  // Indexação RAG em background — empresa_id = NULL (conhecimento global TOTVS)
-  setImmediate(() => {
-    indexBibliotecaTotvs(record.id, file.buffer.toString('utf-8'))
-      .catch((err: unknown) => logger.warn({ err, totvsId: record.id }, 'RAG: falha ao indexar TOTVS'));
-  });
-
-  // Indexação RAG em background — empresa_id = NULL (conhecimento global TOTVS)
   setImmediate(() => {
     indexBibliotecaTotvs(record.id, file.buffer.toString('utf-8'))
       .catch((err: unknown) => logger.warn({ err, totvsId: record.id }, 'RAG: falha ao indexar TOTVS'));
