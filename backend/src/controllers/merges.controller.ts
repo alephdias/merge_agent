@@ -35,8 +35,9 @@ export const getReport = asyncHandler(async (req: Request, res: Response) => {
 
 export const download = asyncHandler(async (req: Request, res: Response) => {
   const id = req.params['id'] as string;
-  const buffer = await mergeService.downloadMergeResult(id, getUser(req));
+  const { buffer, filename } = await mergeService.downloadMergeResult(id, getUser(req));
   res.setHeader('Content-Type', 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="merge_${id.slice(0, 8)}.prw"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
   res.send(buffer);
 });

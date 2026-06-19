@@ -155,7 +155,7 @@ Retorne APENAS um JSON válido, sem markdown, sem texto extra:
 }`;
 
     const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-8',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
     });

@@ -16,102 +16,112 @@ import type { CreateMergeInput } from '../schemas/merge.schema';
 
 const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
-// ─── Claude conflict resolver (com RAG) ─────────────────────────────────────
+// ─── Batch conflict resolver (ONE API call, Sonnet = ~5x cheaper than Opus) ──
 
-async function resolveConflict(
-  seg: ConflictSegment,
+async function resolveAllConflicts(
+  conflicts: ConflictSegment[],
   empresaId: string,
   jobId: string,
-): Promise<string> {
-  // 1. Busca contexto histórico isolado por empresa_id
+): Promise<Map<string, string>> {
+  if (conflicts.length === 0) return new Map();
+
+  // Single RAG lookup for the whole batch (representative block)
+  const first = conflicts[0]!;
   const ragContext = await retrieveContext(
     empresaId,
-    seg.blockName,
-    seg.empresaContent ?? seg.totvsContent ?? '',
-  );
+    first.blockName,
+    first.empresaContent ?? first.totvsContent ?? '',
+  ).catch(() => '');
 
   const lines: string[] = [
-    'You are an expert AdvPL/TLPP developer. Resolve the following three-way merge conflict.',
-    `Block name: ${seg.blockName}`,
+    'You are an expert AdvPL/TLPP developer. Resolve ALL the merge conflicts below in ONE response.',
+    'For each conflict: produce merged code preserving both the TOTVS update AND the company customization.',
+    '',
+    'Respond with a single JSON object: {"blockName": "resolved code", ...}',
+    'Output ONLY valid JSON. No markdown fences, no explanation.',
     '',
   ];
 
-  // 2. Injeta contexto RAG no topo do prompt quando disponível
   if (ragContext) {
     lines.push(ragContext);
     lines.push('');
-    lines.push(
-      'Use the historical context above to understand this company\'s coding style and past merge decisions. ' +
-      'Apply the same patterns when resolving the conflict below.',
-    );
+  }
+
+  for (const seg of conflicts) {
+    lines.push(`=== CONFLICT: ${seg.blockName} ===`);
+    if (seg.ancestorContent !== null) {
+      lines.push('ANCESTOR (original TOTVS base):');
+      lines.push(seg.ancestorContent.slice(0, 3000));
+    }
+    lines.push('');
+    if (seg.totvsContent !== null) {
+      lines.push('TOTVS UPDATE (new version):');
+      lines.push(seg.totvsContent.slice(0, 3000));
+    } else {
+      lines.push('TOTVS UPDATE: block was DELETED in new TOTVS version.');
+    }
+    lines.push('');
+    lines.push('COMPANY CUSTOMIZATION:');
+    if (seg.empresaContent !== null) {
+      lines.push(seg.empresaContent.slice(0, 3000));
+    } else {
+      lines.push('(block was deleted in company version)');
+    }
     lines.push('');
   }
 
-  if (seg.ancestorContent !== null) {
-    lines.push('ANCESTOR (original TOTVS base):');
-    lines.push('```');
-    lines.push(seg.ancestorContent);
-    lines.push('```');
-    lines.push('');
-  }
-
-  if (seg.totvsContent !== null) {
-    lines.push('TOTVS UPDATE (new version from TOTVS):');
-    lines.push('```');
-    lines.push(seg.totvsContent);
-    lines.push('```');
-  } else {
-    lines.push('TOTVS UPDATE: this block was DELETED in the new TOTVS version.');
-  }
-  lines.push('');
-
-  lines.push('COMPANY CUSTOMIZATION (company changes applied to ancestor):');
-  if (seg.empresaContent !== null) {
-    lines.push('```');
-    lines.push(seg.empresaContent);
-    lines.push('```');
-  } else {
-    lines.push('(this block was deleted in the company version)');
-  }
-  lines.push('');
-  lines.push(
-    'Output ONLY the final merged AdvPL code that preserves both the TOTVS update and the company customization. ' +
-    'No explanation, no markdown fences — just the raw code.',
-  );
+  lines.push('=== END OF CONFLICTS ===');
+  lines.push('Respond ONLY with the JSON object resolving every block above.');
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-8',
-    max_tokens: 4096,
+    model: 'claude-sonnet-4-6',
+    max_tokens: 16000,
     messages: [{ role: 'user', content: lines.join('\n') }],
   });
 
   const textBlock = response.content.find((c) => c.type === 'text');
-  const resolved  = textBlock?.type === 'text' ? textBlock.text : (seg.totvsContent ?? seg.empresaContent ?? '');
+  const text = textBlock?.type === 'text' ? textBlock.text.trim() : '{}';
 
-  // 3. Indexa resolução para aprendizado futuro (fire-and-forget, isolado por empresa_id)
-  setImmediate(() => {
-    const summary = [
-      seg.ancestorContent ? `ANCESTOR:\n${seg.ancestorContent.slice(0, 300)}` : '',
-      seg.totvsContent    ? `TOTVS:\n${seg.totvsContent.slice(0, 300)}`        : 'TOTVS: bloco removido',
-      seg.empresaContent  ? `EMPRESA:\n${seg.empresaContent.slice(0, 300)}`    : 'EMPRESA: bloco removido',
-    ].filter(Boolean).join('\n\n');
+  let resolved: Record<string, string>;
+  try {
+    const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
+    resolved = JSON.parse(cleaned) as Record<string, string>;
+  } catch {
+    logger.warn({ jobId }, 'Batch conflict JSON parse failed — falling back to TOTVS content');
+    resolved = {};
+    for (const seg of conflicts) {
+      resolved[seg.blockName] = seg.totvsContent ?? seg.empresaContent ?? '';
+    }
+  }
 
-    indexMergeResolution(jobId, empresaId, seg.blockName, summary, resolved)
-      .catch((err: unknown) => logger.warn({ err, jobId, blockName: seg.blockName }, 'RAG: falha ao indexar resolução'));
-  });
+  // Index resolutions for RAG learning (fire-and-forget, empresa-isolated)
+  for (const seg of conflicts) {
+    const resolvedCode = resolved[seg.blockName] ?? '';
+    if (!resolvedCode) continue;
+    setImmediate(() => {
+      const summary = [
+        seg.ancestorContent ? `ANCESTOR:\n${seg.ancestorContent.slice(0, 200)}` : '',
+        seg.totvsContent    ? `TOTVS:\n${seg.totvsContent.slice(0, 200)}`        : 'TOTVS: bloco removido',
+        seg.empresaContent  ? `EMPRESA:\n${seg.empresaContent.slice(0, 200)}`    : 'EMPRESA: bloco removido',
+      ].filter(Boolean).join('\n\n');
+      indexMergeResolution(jobId, empresaId, seg.blockName, summary, resolvedCode)
+        .catch((err: unknown) => logger.warn({ err, jobId, blockName: seg.blockName }, 'RAG: falha ao indexar resolução'));
+    });
+  }
 
-  return resolved;
+  return new Map(Object.entries(resolved));
 }
 
 // ─── HTML report generator ───────────────────────────────────────────────────
 
-const CATEGORY_COLORS: Record<ChangeCategory, string> = {
-  igual:        '#f5f5f5',
-  totvs_update: '#e3f2fd',
-  empresa:      '#e8f5e9',
-  conflito:     '#ffebee',
-  novo_totvs:   '#f3e5f5',
-  removido:     '#fff3e0',
+// Vivid colors — high contrast for easy visual parsing
+const CATEGORY_COLORS: Record<ChangeCategory, { bg: string; border: string; text: string }> = {
+  igual:        { bg: '#f8f9fa', border: '#e9ecef', text: '#495057' },
+  totvs_update: { bg: '#cce5ff', border: '#4dabf7', text: '#003d8a' },
+  empresa:      { bg: '#d3f9d8', border: '#51cf66', text: '#1a5928' },
+  conflito:     { bg: '#ffe3e3', border: '#ff6b6b', text: '#7d1313' },
+  novo_totvs:   { bg: '#e5dbff', border: '#845ef7', text: '#3b0082' },
+  removido:     { bg: '#ffe8cc', border: '#fd7e14', text: '#7d3500' },
 };
 
 const CATEGORY_LABELS: Record<ChangeCategory, string> = {
@@ -132,24 +142,39 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function generateHtmlReport(reportLines: ReportLine[], stats: Record<ChangeCategory, number>): string {
+function generateHtmlReport(
+  reportLines: ReportLine[],
+  stats: Record<ChangeCategory, number>,
+  empresaNome: string,
+  fonteNome: string,
+): string {
   const statsHtml = (Object.entries(stats) as [ChangeCategory, number][])
-    .map(([cat, count]) =>
-      `<div class="stat"><span style="background:${CATEGORY_COLORS[cat]};padding:2px 8px;border-radius:3px">${CATEGORY_LABELS[cat]}</span> <strong>${count}</strong> bloco(s)</div>`,
-    )
-    .join('\n    ');
+    .map(([cat, count]) => {
+      const c = CATEGORY_COLORS[cat];
+      return `<div class="stat-item" style="background:${c.bg};border:1.5px solid ${c.border};color:${c.text}">
+        <span class="stat-label">${CATEGORY_LABELS[cat]}</span>
+        <strong class="stat-count">${count}</strong>
+      </div>`;
+    })
+    .join('\n');
 
-  const legendHtml = (Object.entries(CATEGORY_COLORS) as [ChangeCategory, string][])
-    .map(([cat, color]) =>
-      `<div class="legend-item"><div class="legend-color" style="background:${color}"></div>${CATEGORY_LABELS[cat]}</div>`,
+  const legendHtml = (Object.entries(CATEGORY_COLORS) as [ChangeCategory, { bg: string; border: string; text: string }][])
+    .map(([cat, c]) =>
+      `<div class="legend-item">
+        <div class="legend-swatch" style="background:${c.bg};border:2px solid ${c.border}"></div>
+        <span style="color:${c.text};font-weight:500">${CATEGORY_LABELS[cat]}</span>
+      </div>`,
     )
-    .join('\n    ');
+    .join('\n');
 
   const rows = reportLines
     .map((l, i) => {
-      const bg = CATEGORY_COLORS[l.category];
-      const strikethrough = l.category === 'removido' ? 'text-decoration:line-through;opacity:.65;' : '';
-      return `<tr><td class="ln">${i + 1}</td><td class="code" style="background:${bg};${strikethrough}">${escapeHtml(l.content)}</td></tr>`;
+      const c = CATEGORY_COLORS[l.category];
+      const extra = l.category === 'removido' ? 'removed-line' : '';
+      return `<tr class="${extra}">
+        <td class="ln" style="background:${c.border}22">${i + 1}</td>
+        <td class="code" style="background:${c.bg};border-left:3px solid ${c.border}">${escapeHtml(l.content)}</td>
+      </tr>`;
     })
     .join('\n');
 
@@ -157,30 +182,37 @@ function generateHtmlReport(reportLines: ReportLine[], stats: Record<ChangeCateg
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Relatório de Merge — Merge Agent NFESEFAZ</title>
+<title>Merge — ${fonteNome} — ${empresaNome}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Consolas,Monaco,'Courier New',monospace;font-size:13px;background:#fff}
-.header{padding:16px 20px;background:#fff;border-bottom:2px solid #e0e0e0}
-.header h2{font-size:16px;margin-bottom:10px}
-.legend{display:flex;gap:12px;flex-wrap:wrap}
-.legend-item{display:flex;align-items:center;gap:6px;font-size:12px}
-.legend-color{width:22px;height:14px;border:1px solid rgba(0,0,0,.1);border-radius:2px;flex-shrink:0}
-.stats{padding:10px 20px;background:#fafafa;border-bottom:1px solid #eee;display:flex;gap:16px;flex-wrap:wrap}
-.stat{font-size:12px;display:flex;align-items:center;gap:6px}
-.stat strong{font-size:14px}
+body{font-family:Consolas,Monaco,'Courier New',monospace;font-size:14px;background:#fff;color:#212529}
+.header{padding:16px 20px;background:#0f1d3a;color:#fff}
+.header h2{font-size:16px;font-weight:700;margin-bottom:4px;font-family:Inter,sans-serif}
+.header .subtitle{font-size:12px;opacity:.65;font-family:Inter,sans-serif}
+.legend{padding:12px 20px;background:#fff;border-bottom:2px solid #e9ecef;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.legend-label{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-right:4px;font-family:Inter,sans-serif}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:12px;font-family:Inter,sans-serif}
+.legend-swatch{width:18px;height:12px;border-radius:3px;flex-shrink:0}
+.stats{padding:10px 20px;background:#f8f9fa;border-bottom:1px solid #e9ecef;display:flex;gap:8px;flex-wrap:wrap}
+.stat-item{display:flex;align-items:center;gap:8px;padding:5px 12px;border-radius:6px;font-family:Inter,sans-serif}
+.stat-label{font-size:12px;font-weight:500}
+.stat-count{font-size:16px;font-weight:700}
 table{width:100%;border-collapse:collapse}
-td{padding:1px 8px;white-space:pre;font-size:12px;line-height:1.5}
-td.ln{color:#aaa;text-align:right;user-select:none;border-right:1px solid #e8e8e8;width:52px;background:#fafafa;font-size:11px}
-td.code{width:100%}
+td{padding:1px 0;white-space:pre;font-size:13.5px;line-height:1.55}
+td.ln{color:#868e96;text-align:right;user-select:none;border-right:1px solid #dee2e6;width:52px;padding:1px 8px;font-size:11px;vertical-align:top}
+td.code{width:100%;padding:1px 12px}
+tr.removed-line td.code{text-decoration:line-through;opacity:.7}
+tr:hover td.code{filter:brightness(.96)}
 </style>
 </head>
 <body>
 <div class="header">
-  <h2>Relatório de Merge — Merge Agent NFESEFAZ</h2>
-  <div class="legend">
-    ${legendHtml}
-  </div>
+  <h2>Relatório de Merge — ${escapeHtml(fonteNome)}</h2>
+  <div class="subtitle">Empresa: ${escapeHtml(empresaNome)} · Gerado pelo Merge Agent</div>
+</div>
+<div class="legend">
+  <span class="legend-label">Legenda:</span>
+  ${legendHtml}
 </div>
 <div class="stats">
   ${statsHtml}
@@ -192,7 +224,7 @@ ${rows}
 </html>`;
 }
 
-// ─── Core async processor (never blocks event loop) ─────────────────────────
+// ─── Core async processor ────────────────────────────────────────────────────
 
 async function processMergeJob(jobId: string): Promise<void> {
   await mergesRepo.updateStatus(jobId, 'processing');
@@ -200,7 +232,6 @@ async function processMergeJob(jobId: string): Promise<void> {
   const job = await mergesRepo.findById(jobId);
   if (!job) throw new Error(`Job ${jobId} não encontrado após criação`);
 
-  // Download the three source files
   const fonteRecord = await fontesRepo.findById(job.fonte_empresa_id, job.empresa_id);
   if (!fonteRecord) throw new Error('Fonte da empresa não encontrada');
 
@@ -209,13 +240,14 @@ async function processMergeJob(jobId: string): Promise<void> {
     : null;
   if (!totvsAtualRecord) throw new Error('Versão TOTVS atual não encontrada');
 
+  const empresa = await empresasRepo.findById(job.empresa_id);
+  const empresaNome = empresa?.nome ?? 'Empresa';
+
   const [totvsAtualBuf, empresaBuf] = await Promise.all([
     downloadFile(totvsAtualRecord.storage_path),
     downloadFile(fonteRecord.storage_path),
   ]);
 
-  // Ancestor: use previous TOTVS version if available, otherwise use totvs_atual as ancestor
-  // (two-way merge falls back gracefully: ancestor==totvs → only empresa changes detected)
   let ancestorBuf: Buffer;
   if (job.totvs_v_anterior_id) {
     const anteriorRecord = await totvsRepo.findById(job.totvs_v_anterior_id);
@@ -225,26 +257,19 @@ async function processMergeJob(jobId: string): Promise<void> {
     ancestorBuf = totvsAtualBuf;
   }
 
-  const ancestorSource  = ancestorBuf.toString('utf-8');
-  const totvsSource     = totvsAtualBuf.toString('utf-8');
-  const empresaSource   = empresaBuf.toString('utf-8');
+  const ancestorSource = ancestorBuf.toString('utf-8');
+  const totvsSource    = totvsAtualBuf.toString('utf-8');
+  const empresaSource  = empresaBuf.toString('utf-8');
 
-  // Three-way merge (block-level)
   const { segments, conflictCount } = threeWayMerge(ancestorSource, totvsSource, empresaSource);
 
-  // Resolve conflicts with Claude
-  const resolvedMap = new Map<string, string>();
-  for (const seg of segments) {
-    if (seg.kind === 'conflict') {
-      logger.info({ jobId, blockName: seg.blockName }, 'Resolvendo conflito com Claude + RAG');
-      const resolved = await resolveConflict(seg, job.empresa_id, jobId);
-      resolvedMap.set(seg.blockName, resolved);
-    }
-  }
+  // Resolve ALL conflicts in ONE batched API call (was: one call per conflict)
+  const conflictSegs = segments.filter((s): s is ConflictSegment => s.kind === 'conflict');
+  const resolvedMap  = await resolveAllConflicts(conflictSegs, job.empresa_id, jobId);
 
-  // Assemble report lines and output content
+  // Assemble report lines and merged output
   const reportLines: ReportLine[] = [];
-  const outputLines: string[] = [];
+  const outputLines: string[]     = [];
   const stats: Record<ChangeCategory, number> = {
     igual: 0, totvs_update: 0, empresa: 0,
     conflito: 0, novo_totvs: 0, removido: 0,
@@ -256,33 +281,29 @@ async function processMergeJob(jobId: string): Promise<void> {
 
     if (seg.kind === 'resolved') {
       category = seg.category;
-      content = seg.category === 'removido'
-        ? (seg.removedContent ?? '')
-        : seg.content;
+      content  = seg.category === 'removido' ? (seg.removedContent ?? '') : seg.content;
     } else {
       category = 'conflito';
-      content = resolvedMap.get(seg.blockName) ?? seg.totvsContent ?? seg.empresaContent ?? '';
+      content  = resolvedMap.get(seg.blockName) ?? seg.totvsContent ?? seg.empresaContent ?? '';
     }
 
     stats[category]++;
 
-    // Only include non-removed blocks in output .prw
     if (category !== 'removido') {
-      const resolvedContent = seg.kind === 'resolved' ? seg.content : (resolvedMap.get(seg.blockName) ?? '');
-      outputLines.push(resolvedContent);
+      const resolved = seg.kind === 'resolved' ? seg.content : (resolvedMap.get(seg.blockName) ?? '');
+      outputLines.push(resolved);
     }
 
-    // All blocks go to the report (including removido with visual strikethrough)
     for (const line of content.split('\n')) {
       reportLines.push({ content: line, category });
     }
   }
 
   const mergedContent = outputLines.join('\n');
-  const resultPath = `merges/${jobId}/${uuidv4()}.prw`;
+  const resultPath    = `merges/${jobId}/${uuidv4()}.prw`;
   await uploadFile(resultPath, Buffer.from(mergedContent, 'utf-8'), 'text/plain');
 
-  const htmlReport = generateHtmlReport(reportLines, stats);
+  const htmlReport = generateHtmlReport(reportLines, stats, empresaNome, fonteRecord.nome_arquivo);
 
   await mergesRepo.updateDone(jobId, resultPath, htmlReport);
 
@@ -295,7 +316,6 @@ export async function createMergeJob(
   input: CreateMergeInput,
   user: AuthUser,
 ): Promise<MergeJob> {
-  // Resolve empresa_id — from JWT for non-admin, from body for admin
   const empresaId: string =
     user.empresa_id !== null
       ? user.empresa_id
@@ -308,27 +328,22 @@ export async function createMergeJob(
   const empresa = await empresasRepo.findById(empresaId);
   if (!empresa) throw new NotFoundError('Empresa não encontrada');
 
-  // Resolve fonte_empresa (latest upload for this empresa)
   const fonte = await fontesRepo.findLatestByEmpresa(empresaId);
   if (!fonte) throw new ValidationError('Empresa não possui fontes cadastradas. Envie um arquivo primeiro.');
 
-  // Resolve TOTVS versions: exact name match → fallback to any latest
-  let totvsAtualId: string | null = input.totvs_v_atual_id ?? null;
+  let totvsAtualId: string | null    = input.totvs_v_atual_id ?? null;
   let totvsAnteriorId: string | null = input.totvs_v_anterior_id ?? null;
 
   if (!totvsAtualId) {
     let versions = await totvsRepo.findLatestTwoByNomeArquivo(fonte.nome_arquivo);
 
-    // Fallback: nome pode diferir (ex: empresa envia "nfesefaz.prw", biblioteca tem "nfesefaz_totvs.prw")
-    // Tenta match sem extensão e case-insensitive
     if (versions.length === 0) {
       const baseName = fonte.nome_arquivo.replace(/\.[^.]+$/, '').toLowerCase();
       const allTotvs = await totvsRepo.findAll();
-      const matched = allTotvs.filter((t) =>
+      const matched  = allTotvs.filter((t) =>
         t.nome_arquivo.replace(/\.[^.]+$/, '').toLowerCase().includes(baseName) ||
         baseName.includes(t.nome_arquivo.replace(/\.[^.]+$/, '').toLowerCase()),
       );
-      // Ordena: is_selected primeiro, depois is_latest, depois mais recente
       matched.sort((a, b) => {
         if (a.is_selected !== b.is_selected) return a.is_selected ? -1 : 1;
         if (a.is_latest !== b.is_latest) return a.is_latest ? -1 : 1;
@@ -347,14 +362,13 @@ export async function createMergeJob(
   }
 
   const job = await mergesRepo.create({
-    empresa_id:           empresaId,
-    totvs_v_anterior_id:  totvsAnteriorId,
-    totvs_v_atual_id:     totvsAtualId,
-    fonte_empresa_id:     fonte.id,
-    created_by:           user.id,
+    empresa_id:          empresaId,
+    totvs_v_anterior_id: totvsAnteriorId,
+    totvs_v_atual_id:    totvsAtualId,
+    fonte_empresa_id:    fonte.id,
+    created_by:          user.id,
   });
 
-  // Trigger async processing — never blocks the event loop
   setImmediate(() => {
     processMergeJob(job.id).catch((err: unknown) => {
       logger.error({ err, jobId: job.id }, 'Erro fatal no processamento do merge');
@@ -371,27 +385,37 @@ export async function createMergeJob(
 }
 
 export async function listMergeJobs(user: AuthUser, empresaId?: string): Promise<MergeJob[]> {
-  if (user.empresa_id !== null) {
-    // Non-admin: always scoped to their empresa
-    return mergesRepo.findAllByEmpresa(user.empresa_id);
-  }
-  // Admin: filter by empresaId param or return all
+  if (user.empresa_id !== null) return mergesRepo.findAllByEmpresa(user.empresa_id);
   return empresaId ? mergesRepo.findAllByEmpresa(empresaId) : mergesRepo.findAll();
 }
 
 export async function getMergeJob(id: string, user: AuthUser): Promise<MergeJob> {
   const job = await mergesRepo.findById(id);
   if (!job) throw new NotFoundError('Job de merge não encontrado');
-
   if (user.empresa_id !== null && job.empresa_id !== user.empresa_id) {
     throw new ForbiddenError('Acesso negado: job de outra empresa');
   }
-
   return job;
 }
 
-export async function downloadMergeResult(id: string, user: AuthUser): Promise<Buffer> {
+export async function downloadMergeResult(id: string, user: AuthUser): Promise<{ buffer: Buffer; filename: string }> {
   const job = await getMergeJob(id, user);
   if (!job.resultado_path) throw new NotFoundError('Arquivo de resultado ainda não disponível');
-  return downloadFile(job.resultado_path);
+
+  const [buffer, fonte, empresa] = await Promise.all([
+    downloadFile(job.resultado_path),
+    fontesRepo.findById(job.fonte_empresa_id, job.empresa_id),
+    empresasRepo.findById(job.empresa_id),
+  ]);
+
+  // Build descriptive filename: nfesefaz_gulf_merged.prw
+  const baseName = (fonte?.nome_arquivo ?? 'fonte').replace(/\.[^.]+$/, '');
+  const slug = (empresa?.slug ?? empresa?.nome ?? 'empresa')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // remove accents
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+  const filename = `${baseName}_${slug}_merged.prw`;
+
+  return { buffer, filename };
 }
