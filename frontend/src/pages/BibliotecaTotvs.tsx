@@ -39,7 +39,7 @@ function DescricaoCell({ texto }: { texto: string | null }) {
   if (!texto) return <span style={{ color: '#d1d5db' }}>—</span>;
   const truncado = texto.length > 40;
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>
       <span style={{ fontSize: 13, color: '#6b7280' }}>
         {truncado ? `${texto.slice(0, 40)}…` : texto}
       </span>
@@ -287,11 +287,21 @@ export function BibliotecaTotvs() {
             <p style={{ fontSize: 14, color: '#9ca3af' }}>Nenhuma versão TOTVS carregada.</p>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: 175 }} />
+              <col style={{ width: 95 }} />
+              <col style={{ width: 145 }} />
+              <col style={{ width: 200 }} />
+              <col style={{ width: 155 }} />
+              <col style={{ width: 140 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 130 }} />
+            </colgroup>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
                 {['Arquivo', 'Data Pacote', 'Nº Pacote', 'Descrição', 'Upload por', 'Enviado em', 'Status', ''].map((h) => (
-                  <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap', overflow: 'hidden' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -304,14 +314,14 @@ export function BibliotecaTotvs() {
                   onMouseLeave={(el) => { el.currentTarget.style.background = 'transparent'; }}
                 >
                   {/* Arquivo */}
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <td style={{ padding: '12px 16px', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                       <div style={{ width: 28, height: 28, borderRadius: 6, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <svg width="13" height="13" fill="none" stroke="#2563eb" strokeWidth="1.75" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                         </svg>
                       </div>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{r.nome_arquivo}</span>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nome_arquivo}</span>
                     </div>
                   </td>
 
@@ -319,20 +329,20 @@ export function BibliotecaTotvs() {
                   <td style={{ padding: '12px 16px', fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>{formatDate(r.data_pacote)}</td>
 
                   {/* Nº Pacote */}
-                  <td style={{ padding: '12px 16px', fontSize: 12, color: '#6b7280', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.numero_pacote ?? '—'}</td>
+                  <td style={{ padding: '12px 16px', fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.numero_pacote ?? '—'}</td>
 
                   {/* Descrição */}
-                  <td style={{ padding: '12px 16px', maxWidth: 220 }}>
+                  <td style={{ padding: '12px 16px', overflow: 'hidden' }}>
                     <DescricaoCell texto={r.descricao} />
                   </td>
 
                   {/* Upload por */}
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <td style={{ padding: '12px 16px', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                       <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
                         {(r.uploader_email ?? '?').charAt(0).toUpperCase()}
                       </div>
-                      <span style={{ fontSize: 12, color: '#6b7280' }}>{r.uploader_email ?? '—'}</span>
+                      <span style={{ fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.uploader_email ?? '—'}</span>
                     </div>
                   </td>
 
