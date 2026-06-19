@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useAuthStore } from '../store/auth.store';
 
 type Mode = 'login' | 'register';
 
@@ -61,7 +62,16 @@ export function Login() {
   const nav = useNavigate();
   const location = useLocation();
   const { login, register } = useAuth();
+  const setAuth = useAuthStore((s) => s.setAuth);
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/';
+
+  function enterDemo() {
+    setAuth(
+      { id: 'demo', nome: 'Demo User', email: 'demo@preview.dev', empresa_id: null },
+      'demo-token',
+    );
+    nav(from, { replace: true });
+  }
 
   const [mode, setMode] = useState<Mode>('login');
   const [nome, setNome] = useState('');
@@ -214,6 +224,33 @@ export function Login() {
                 {mode === 'login' ? 'Cadastre-se' : 'Entrar'}
               </button>
             </p>
+
+            {import.meta.env.DEV && (
+              <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px dashed #e5e7eb' }}>
+                <p style={{ textAlign: 'center', fontSize: 11, color: '#9ca3af', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Modo Preview
+                </p>
+                <button
+                  onClick={enterDemo}
+                  style={{
+                    width: '100%', height: 40, borderRadius: 8,
+                    border: '1.5px dashed #d1d5db', background: '#f9fafb',
+                    color: '#6b7280', fontSize: 13, fontWeight: 500,
+                    cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    transition: 'border-color 0.15s, background 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.color = '#2563eb'; e.currentTarget.style.background = '#eff6ff'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#6b7280'; e.currentTarget.style.background = '#f9fafb'; }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                  </svg>
+                  Entrar como Demo (preview only)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

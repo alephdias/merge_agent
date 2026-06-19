@@ -1,11 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Header } from '../components/layout/Header';
-import { Spinner } from '../components/ui/Spinner';
-import { Table } from '../components/ui/Table';
-import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../hooks/useAuth';
 import { formatDate, formatDateTime } from '../utils/formatters';
 import api from '../services/api';
@@ -18,12 +11,49 @@ interface UploadForm {
   descricao: string;
 }
 
-const EMPTY_FORM: UploadForm = {
-  arquivo: null,
-  data_pacote: '',
-  numero_pacote: '',
-  descricao: '',
-};
+const EMPTY_FORM: UploadForm = { arquivo: null, data_pacote: '', numero_pacote: '', descricao: '' };
+
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: '#fff', borderRadius: 16, width: 460, boxShadow: '0 20px 60px rgba(0,0,0,0.15)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px 16px', borderBottom: '1px solid #f3f4f6' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#111827' }}>{title}</h3>
+          <button onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', padding: 4, borderRadius: 6 }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#374151'; e.currentTarget.style.background = '#f3f4f6'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#9ca3af'; e.currentTarget.style.background = 'none'; }}>
+            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div style={{ padding: '20px 24px 24px' }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function FieldInput({ label, value, onChange, placeholder, type = 'text' }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>{label}</label>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={{
+          height: 40, padding: '0 12px', fontSize: 14, color: '#111827', background: '#fff',
+          borderRadius: 8, outline: 'none', fontFamily: 'Inter, sans-serif',
+          border: `1.5px solid ${focused ? '#2563eb' : '#e5e7eb'}`,
+          boxShadow: focused ? '0 0 0 3px rgba(37,99,235,0.1)' : 'none',
+          transition: 'border-color 0.15s, box-shadow 0.15s',
+        }}
+      />
+    </div>
+  );
+}
 
 export function BibliotecaTotvs() {
   const { user } = useAuth();
@@ -32,7 +62,6 @@ export function BibliotecaTotvs() {
   const [list, setList] = useState<Totvs[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<UploadForm>(EMPTY_FORM);
   const [formError, setFormError] = useState('');
@@ -54,11 +83,6 @@ export function BibliotecaTotvs() {
 
   useEffect(() => { void loadList(); }, [loadList]);
 
-  function setText(field: Exclude<keyof UploadForm, 'arquivo'>) {
-    return (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm((prev) => ({ ...prev, [field]: e.target.value }));
-  }
-
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
     if (!form.arquivo) { setFormError('Selecione um arquivo'); return; }
@@ -73,18 +97,13 @@ export function BibliotecaTotvs() {
       if (form.descricao) fd.append('descricao', form.descricao);
 
       const { data: result, status } = await api.post<{ data: Totvs; deduplicado: boolean }>(
-        '/totvs/upload',
-        fd,
-        { headers: { 'Content-Type': 'multipart/form-data' } },
+        '/totvs/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } },
       );
-
       setForm(EMPTY_FORM);
       setShowModal(false);
-      setUploadMsg(
-        result.deduplicado
-          ? `Arquivo já existia na biblioteca (hash idêntico) — nenhum duplicado criado.`
-          : `Arquivo "${result.data.nome_arquivo}" enviado com sucesso!`,
-      );
+      setUploadMsg(result.deduplicado
+        ? 'Arquivo já existia na biblioteca (hash idêntico) — nenhum duplicado criado.'
+        : `Arquivo "${result.data.nome_arquivo}" enviado com sucesso!`);
       if (status === 201) await loadList();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Erro ao enviar arquivo');
@@ -93,100 +112,145 @@ export function BibliotecaTotvs() {
     }
   }
 
-  const columns = [
-    { header: 'Arquivo', render: (r: Totvs) => r.nome_arquivo },
-    { header: 'Data Pacote', render: (r: Totvs) => formatDate(r.data_pacote) },
-    { header: 'Nº Pacote', render: (r: Totvs) => r.numero_pacote ?? '—' },
-    { header: 'Descrição', render: (r: Totvs) => r.descricao ?? '—' },
-    { header: 'Upload', render: (r: Totvs) => formatDateTime(r.data_upload) },
-    {
-      header: 'Status',
-      render: (r: Totvs) => r.is_latest ? <Badge label="Atual" color="#4caf50" /> : null,
-      width: '80px',
-    },
-  ];
-
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
-      <Header />
-      <main style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h2 style={{ margin: 0 }}>Biblioteca TOTVS</h2>
-          {isAdmin && (
-            <Button onClick={() => { setShowModal(true); setUploadMsg(''); }}>
-              + Enviar Versão
-            </Button>
-          )}
-        </div>
+    <div style={{ padding: '28px 32px', fontFamily: 'Inter, sans-serif' }}>
 
-        {uploadMsg && (
-          <p style={{ color: '#1976d2', background: '#e3f2fd', padding: '10px 14px', borderRadius: 6, fontSize: 14 }}>
-            {uploadMsg}
-          </p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#111827' }}>Biblioteca TOTVS</h2>
+          <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6b7280' }}>{list.length} versão{list.length !== 1 ? 'ões' : ''} disponível{list.length !== 1 ? 'eis' : ''}</p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => { setShowModal(true); setUploadMsg(''); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              height: 38, padding: '0 16px', borderRadius: 8,
+              border: 'none', background: '#2563eb', color: '#fff',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'Inter, sans-serif', boxShadow: '0 2px 8px rgba(37,99,235,0.3)',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#1d4ed8'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#2563eb'; }}
+          >
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            Enviar Versão
+          </button>
         )}
-        {error && <p style={{ color: '#f44336' }}>{error}</p>}
+      </div>
+
+      {uploadMsg && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderRadius: 10, background: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: 20 }}>
+          <svg width="14" height="14" fill="none" stroke="#2563eb" strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+          </svg>
+          <span style={{ fontSize: 13, color: '#1d4ed8' }}>{uploadMsg}</span>
+        </div>
+      )}
+
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+        {error && <p style={{ padding: '16px 20px', color: '#dc2626', fontSize: 13 }}>{error}</p>}
         {loading ? (
-          <Spinner />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
+              <circle cx="12" cy="12" r="10" stroke="#e5e7eb" strokeWidth="3" />
+              <path d="M12 2a10 10 0 0 1 10 10" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+          </div>
+        ) : list.length === 0 ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+            <p style={{ fontSize: 14, color: '#9ca3af' }}>Nenhuma versão TOTVS carregada.</p>
+          </div>
         ) : (
-          <Table
-            columns={columns}
-            rows={list}
-            keyExtractor={(r) => r.id}
-            emptyMessage="Nenhuma versão TOTVS carregada."
-          />
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#f9fafb' }}>
+                {['Arquivo', 'Data Pacote', 'Nº Pacote', 'Descrição', 'Upload', 'Status'].map((h) => (
+                  <th key={h} style={{ padding: '10px 20px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((r, idx) => (
+                <tr
+                  key={r.id}
+                  style={{ borderBottom: idx < list.length - 1 ? '1px solid #f9fafb' : 'none', transition: 'background 0.1s' }}
+                  onMouseEnter={(el) => { el.currentTarget.style.background = '#f8faff'; }}
+                  onMouseLeave={(el) => { el.currentTarget.style.background = 'transparent'; }}
+                >
+                  <td style={{ padding: '12px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 6, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="13" height="13" fill="none" stroke="#2563eb" strokeWidth="1.75" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                        </svg>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{r.nome_arquivo}</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '12px 20px', fontSize: 13, color: '#6b7280' }}>{formatDate(r.data_pacote)}</td>
+                  <td style={{ padding: '12px 20px', fontSize: 13, color: '#6b7280' }}>{r.numero_pacote ?? '—'}</td>
+                  <td style={{ padding: '12px 20px', fontSize: 13, color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.descricao ?? '—'}</td>
+                  <td style={{ padding: '12px 20px', fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>{formatDateTime(r.data_upload)}</td>
+                  <td style={{ padding: '12px 20px' }}>
+                    {r.is_latest && (
+                      <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, background: '#f0fdf4', color: '#16a34a', fontSize: 11, fontWeight: 600 }}>Atual</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
-      </main>
+      </div>
 
       {showModal && (
-        <Modal
-          title="Enviar Versão TOTVS"
-          onClose={() => { setShowModal(false); setForm(EMPTY_FORM); setFormError(''); }}
-        >
+        <Modal title="Enviar Versão TOTVS" onClose={() => { setShowModal(false); setForm(EMPTY_FORM); setFormError(''); }}>
           <form onSubmit={(e) => void handleUpload(e)} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <label style={labelStyle}>
-              Arquivo (.prw / .tlpp / .prx) *
-              <input
-                type="file"
-                accept=".prw,.tlpp,.prx"
-                required
-                style={{ marginTop: 6, display: 'block' }}
-                onChange={(e) => setForm((prev) => ({ ...prev, arquivo: e.target.files?.[0] ?? null }))}
-              />
-            </label>
-            <Input
-              label="Data do Pacote"
-              type="date"
-              value={form.data_pacote}
-              onChange={setText('data_pacote')}
-            />
-            <Input
-              label="Número do Pacote"
-              value={form.numero_pacote}
-              onChange={setText('numero_pacote')}
-              placeholder="Ex: 12.1.33"
-            />
-            <Input
-              label="Descrição"
-              value={form.descricao}
-              onChange={setText('descricao')}
-              placeholder="Resumo das alterações"
-            />
-            {formError && <p style={{ color: '#f44336', margin: 0, fontSize: 13 }}>{formError}</p>}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }}
-              >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Arquivo (.prw / .tlpp / .prx) *</label>
+              <div style={{ border: '1.5px dashed #d1d5db', borderRadius: 8, padding: '16px', textAlign: 'center', cursor: 'pointer', background: '#f9fafb' }}>
+                <input
+                  type="file" accept=".prw,.tlpp,.prx" required
+                  style={{ display: 'none' }}
+                  id="file-input-totvs"
+                  onChange={(e) => setForm((prev) => ({ ...prev, arquivo: e.target.files?.[0] ?? null }))}
+                />
+                <label htmlFor="file-input-totvs" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <svg width="20" height="20" fill="none" stroke="#9ca3af" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                  </svg>
+                  {form.arquivo
+                    ? <span style={{ fontSize: 13, color: '#111827', fontWeight: 500 }}>{form.arquivo.name}</span>
+                    : <span style={{ fontSize: 13, color: '#9ca3af' }}>Clique para selecionar</span>
+                  }
+                </label>
+              </div>
+            </div>
+            <FieldInput label="Data do Pacote" type="date" value={form.data_pacote} onChange={(v) => setForm((p) => ({ ...p, data_pacote: v }))} />
+            <FieldInput label="Número do Pacote" value={form.numero_pacote} onChange={(v) => setForm((p) => ({ ...p, numero_pacote: v }))} placeholder="Ex: 12.1.33" />
+            <FieldInput label="Descrição" value={form.descricao} onChange={(v) => setForm((p) => ({ ...p, descricao: v }))} placeholder="Resumo das alterações" />
+            {formError && (
+              <p style={{ fontSize: 13, color: '#dc2626', margin: 0 }}>{formError}</p>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button type="button" onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }}
+                style={{ height: 38, padding: '0 16px', borderRadius: 8, border: '1.5px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
                 Cancelar
-              </Button>
-              <Button type="submit" loading={saving}>Enviar</Button>
+              </button>
+              <button type="submit" disabled={saving}
+                style={{ height: 38, padding: '0 20px', borderRadius: 8, border: 'none', background: saving ? '#93c5fd' : '#2563eb', fontSize: 13, fontWeight: 600, color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {saving && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="3"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>}
+                {saving ? 'Enviando...' : 'Enviar'}
+              </button>
             </div>
           </form>
         </Modal>
       )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
-
-const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#333' };

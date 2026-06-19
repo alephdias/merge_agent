@@ -1,13 +1,15 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../store/auth.store';
 import { Sidebar } from './Sidebar';
+import { TopBar } from './TopBar';
 import type { ReactNode } from 'react';
 
 interface ProtectedRouteProps {
   children: ReactNode;
+  pageTitle?: string;
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, pageTitle }: ProtectedRouteProps) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const location = useLocation();
 
@@ -16,11 +18,14 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   return (
-    <div className="flex min-h-screen" style={{ background: '#f9fafb' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'Inter, sans-serif' }}>
       <Sidebar />
-      <main className="flex-1 overflow-auto" style={{ background: '#f9fafb' }}>
-        {children}
-      </main>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#f5f7ff' }}>
+        <TopBar title={pageTitle} />
+        <main style={{ flex: 1, overflow: 'auto' }}>
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
