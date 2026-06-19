@@ -243,100 +243,101 @@ export function ComparativoTotvs() {
 
       {result && (
         <>
-          {/* Stats + análise IA */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, marginBottom: 20, alignItems: 'start' }}>
-
-            {/* Stats */}
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: '20px 24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <svg width="15" height="15" fill="none" stroke="#2563eb" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
-                </svg>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Estatísticas do diff</span>
-              </div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
-                <StatBadge count={result.stats.added} label="linhas adicionadas" color="#16a34a" />
-                <StatBadge count={result.stats.removed} label="linhas removidas" color="#dc2626" />
-                <StatBadge count={result.stats.unchanged} label="linhas sem mudança" color="#6b7280" />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 16, borderTop: '1px solid #f3f4f6' }}>
-                <span style={{ fontSize: 12, color: '#6b7280' }}>Mostrando apenas alterações</span>
-                <button
-                  onClick={() => setShowDiffOnly((v) => !v)}
-                  style={{
-                    height: 22, padding: '0 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                    border: '1px solid #e5e7eb', background: showDiffOnly ? '#eff6ff' : '#fff',
-                    color: showDiffOnly ? '#2563eb' : '#6b7280', cursor: 'pointer',
-                    fontFamily: 'Inter, sans-serif',
-                  }}
-                >
-                  {showDiffOnly ? 'Ativado' : 'Desativado'}
-                </button>
-                <span style={{ fontSize: 12, color: '#9ca3af' }}>— desative para ver todo o código</span>
-              </div>
-            </div>
-
-            {/* Análise IA */}
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: '20px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <svg width="15" height="15" fill="none" stroke="#7c3aed" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
-                </svg>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Análise IA</span>
-              </div>
-
-              {result.analysis.resumo && (
-                <p style={{ margin: '0 0 14px', fontSize: 12.5, color: '#374151', lineHeight: 1.65, padding: '10px 12px', background: '#f8f7ff', borderRadius: 8, borderLeft: '3px solid #7c3aed' }}>
-                  {result.analysis.resumo}
-                </p>
-              )}
-
-              <AnalysisSection title="Adicionado" items={result.analysis.adicionado} color="#16a34a" icon="+" />
-              <AnalysisSection title="Removido" items={result.analysis.removido} color="#dc2626" icon="−" />
-              <AnalysisSection title="Alterado" items={result.analysis.alterado} color="#d97706" icon="≈" />
-              <AnalysisSection title="Mantido" items={result.analysis.mantido} color="#6b7280" icon="=" />
+          {/* Barra compacta de stats */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+            padding: '10px 16px', marginBottom: 12,
+            background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb',
+          }}>
+            <StatBadge count={result.stats.added} label="adicionadas" color="#16a34a" />
+            <StatBadge count={result.stats.removed} label="removidas" color="#dc2626" />
+            <StatBadge count={result.stats.unchanged} label="sem mudança" color="#6b7280" />
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: '#6b7280' }}>Só alterações</span>
+              <button
+                onClick={() => setShowDiffOnly((v) => !v)}
+                style={{
+                  height: 22, padding: '0 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                  border: '1px solid #e5e7eb', background: showDiffOnly ? '#eff6ff' : '#fff',
+                  color: showDiffOnly ? '#2563eb' : '#6b7280', cursor: 'pointer',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+              >
+                {showDiffOnly ? 'Ativado' : 'Desativado'}
+              </button>
             </div>
           </div>
 
-          {/* Diff viewer */}
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626' }} />
-                <span style={{ fontSize: 12, color: '#6b7280' }}>
-                  <VersionLabel v={result.v1} />
-                </span>
+          {/* Diff viewer + análise IA lado a lado */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 12, alignItems: 'start' }}>
+
+            {/* Diff viewer */}
+            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', minWidth: 0 }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11.5, color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <VersionLabel v={result.v1} />
+                  </span>
+                </div>
+                <span style={{ color: '#d1d5db', flexShrink: 0 }}>→</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11.5, color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <VersionLabel v={result.v2} />
+                  </span>
+                </div>
               </div>
-              <span style={{ color: '#d1d5db' }}>→</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a' }} />
-                <span style={{ fontSize: 12, color: '#6b7280' }}>
-                  <VersionLabel v={result.v2} />
-                </span>
+              <div style={{ fontSize: 12, overflowX: 'auto' }}>
+                <ReactDiffViewer
+                  oldValue={result.oldCode}
+                  newValue={result.newCode}
+                  splitView={true}
+                  showDiffOnly={showDiffOnly}
+                  leftTitle={`v1 — ${result.v1.numero_pacote ?? formatDate(result.v1.data_upload)}`}
+                  rightTitle={`v2 — ${result.v2.numero_pacote ?? formatDate(result.v2.data_upload)}`}
+                  styles={{
+                    variables: {
+                      light: {
+                        diffViewerBackground: '#fff',
+                        addedBackground: '#d1fae5',
+                        addedColor: '#065f46',
+                        addedGutterBackground: '#a7f3d0',
+                        removedBackground: '#fee2e2',
+                        removedColor: '#7f1d1d',
+                        removedGutterBackground: '#fca5a5',
+                        wordAddedBackground: '#6ee7b7',
+                        wordRemovedBackground: '#f87171',
+                        gutterBackground: '#f9fafb',
+                        gutterBackgroundDark: '#f3f4f6',
+                      },
+                    },
+                  }}
+                />
               </div>
             </div>
-            <div style={{ fontSize: 12 }}>
-              <ReactDiffViewer
-                oldValue={result.oldCode}
-                newValue={result.newCode}
-                splitView={true}
-                showDiffOnly={showDiffOnly}
-                leftTitle={`v1 — ${result.v1.numero_pacote ?? formatDate(result.v1.data_upload)}`}
-                rightTitle={`v2 — ${result.v2.numero_pacote ?? formatDate(result.v2.data_upload)}`}
-                styles={{
-                  variables: {
-                    light: {
-                      diffViewerBackground: '#fff',
-                      addedBackground: '#f0fdf4',
-                      addedColor: '#166534',
-                      removedBackground: '#fef2f2',
-                      removedColor: '#991b1b',
-                      wordAddedBackground: '#bbf7d0',
-                      wordRemovedBackground: '#fecaca',
-                    },
-                  },
-                }}
-              />
+
+            {/* Análise IA — sticky */}
+            <div style={{ position: 'sticky', top: 80 }}>
+              <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: '16px 16px', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <svg width="14" height="14" fill="none" stroke="#7c3aed" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+                  </svg>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Análise IA</span>
+                </div>
+
+                {result.analysis.resumo && (
+                  <p style={{ margin: '0 0 14px', fontSize: 12, color: '#374151', lineHeight: 1.65, padding: '10px 12px', background: '#f8f7ff', borderRadius: 8, borderLeft: '3px solid #7c3aed' }}>
+                    {result.analysis.resumo}
+                  </p>
+                )}
+
+                <AnalysisSection title="Adicionado" items={result.analysis.adicionado} color="#16a34a" icon="+" />
+                <AnalysisSection title="Removido" items={result.analysis.removido} color="#dc2626" icon="−" />
+                <AnalysisSection title="Alterado" items={result.analysis.alterado} color="#d97706" icon="≈" />
+                <AnalysisSection title="Mantido" items={result.analysis.mantido} color="#6b7280" icon="=" />
+              </div>
             </div>
           </div>
         </>
