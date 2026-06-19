@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 const BCRYPT_ROUNDS = 12;
 
 export function sha256(buffer: Buffer): string {
-  return crypto.createHash('sha256').update(buffer).digest('hex');
+  return crypto.createHash('sha256').update(buffer.toString('hex'), 'hex').digest('hex');
 }
 
 export function hashToken(token: string): string {
