@@ -265,7 +265,7 @@ export function BibliotecaTotvs() {
         </div>
       )}
 
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', overflowX: 'auto' }}>
         {error && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', background: '#fef2f2', borderBottom: '1px solid #fecaca' }}>
             <svg width="13" height="13" fill="none" stroke="#dc2626" strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
@@ -289,14 +289,14 @@ export function BibliotecaTotvs() {
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
-              <col style={{ width: 175 }} />
-              <col style={{ width: 95 }} />
-              <col style={{ width: 145 }} />
-              <col style={{ width: 200 }} />
-              <col style={{ width: 155 }} />
-              <col style={{ width: 140 }} />
-              <col style={{ width: 110 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 90 }} />
               <col style={{ width: 130 }} />
+              <col style={{ width: 180 }} />
+              <col style={{ width: 145 }} />
+              <col style={{ width: 135 }} />
+              <col style={{ width: 105 }} />
+              <col style={{ width: 160 }} />
             </colgroup>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
