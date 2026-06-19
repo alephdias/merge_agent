@@ -9,9 +9,10 @@ const router = Router();
 
 router.use(authMiddleware);
 
-router.get('/',        ctrl.list);
-router.get('/:id',     ctrl.getOne);
-router.delete('/:id',  ctrl.remove);
+router.get('/',           ctrl.list);
+router.get('/:id',        ctrl.getOne);
+router.put('/:id/select', ctrl.select);
+router.delete('/:id',     ctrl.remove);
 router.post(
   '/upload',
   uploadMiddleware.single('arquivo'),

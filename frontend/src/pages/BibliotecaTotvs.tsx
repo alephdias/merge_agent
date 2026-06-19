@@ -151,6 +151,7 @@ export function BibliotecaTotvs() {
   const [uploadMsg, setUploadMsg] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -196,6 +197,22 @@ export function BibliotecaTotvs() {
     }
   }
 
+  async function handleSelect(id: string) {
+    setSelecting(id);
+    try {
+      const { data: updated } = await api.put<Totvs>(`/totvs/${id}/select`);
+      setList((prev) => prev.map((r) =>
+        r.nome_arquivo === updated.nome_arquivo
+          ? { ...r, is_selected: r.id === id ? updated.is_selected : false }
+          : r,
+      ));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao alterar seleção');
+    } finally {
+      setSelecting(null);
+    }
+  }
+
   async function handleDelete(id: string) {
     setDeleting(id);
     try {
@@ -215,7 +232,7 @@ export function BibliotecaTotvs() {
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#111827' }}>Biblioteca TOTVS</h2>
           <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6b7280' }}>
-            {list.length} versão{list.length !== 1 ? 'ões' : ''} disponível{list.length !== 1 ? 'eis' : ''}
+            {list.length} {list.length !== 1 ? 'versões disponíveis' : 'versão disponível'}
           </p>
         </div>
         {isAdmin && (
@@ -324,19 +341,49 @@ export function BibliotecaTotvs() {
 
                   {/* Status */}
                   <td style={{ padding: '12px 16px' }}>
-                    {r.is_latest && (
-                      <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, background: '#f0fdf4', color: '#16a34a', fontSize: 11, fontWeight: 600 }}>Atual</span>
-                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                      {r.is_selected && (
+                        <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, background: '#eff6ff', color: '#2563eb', fontSize: 11, fontWeight: 600, border: '1px solid #bfdbfe' }}>
+                          ★ Selecionado
+                        </span>
+                      )}
+                      {r.is_latest && !r.is_selected && (
+                        <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, background: '#f0fdf4', color: '#16a34a', fontSize: 11, fontWeight: 600 }}>
+                          Mais recente
+                        </span>
+                      )}
+                    </div>
                   </td>
 
                   {/* Ações */}
                   <td style={{ padding: '12px 16px' }}>
-                    {isAdmin && (
-                      <DeleteBtn
-                        onConfirm={() => void handleDelete(r.id)}
-                        loading={deleting === r.id}
-                      />
-                    )}
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {isAdmin && (
+                        <button
+                          onClick={() => void handleSelect(r.id)}
+                          disabled={selecting === r.id}
+                          title={r.is_selected ? 'Remover seleção (volta ao mais recente)' : 'Usar este como fonte principal para merges'}
+                          style={{
+                            height: 28, padding: '0 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                            cursor: selecting === r.id ? 'not-allowed' : 'pointer',
+                            border: r.is_selected ? '1.5px solid #2563eb' : '1px solid #e5e7eb',
+                            background: r.is_selected ? '#eff6ff' : 'transparent',
+                            color: r.is_selected ? '#2563eb' : '#6b7280',
+                            fontFamily: 'Inter, sans-serif', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                          }}
+                          onMouseEnter={(e) => { if (!r.is_selected) { e.currentTarget.style.background = '#f3f4f6'; } }}
+                          onMouseLeave={(e) => { if (!r.is_selected) { e.currentTarget.style.background = 'transparent'; } }}
+                        >
+                          {selecting === r.id ? '...' : r.is_selected ? '✓ Em uso' : 'Usar este'}
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <DeleteBtn
+                          onConfirm={() => void handleDelete(r.id)}
+                          loading={deleting === r.id}
+                        />
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

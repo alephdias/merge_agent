@@ -34,6 +34,11 @@ export const upload = asyncHandler(async (req: Request, res: Response) => {
   res.status(result.deduplicado ? 200 : 201).json(result);
 });
 
+export const select = asyncHandler(async (req: Request, res: Response) => {
+  const data = await totvsService.selectTotvs(req.params['id'] as string, getUser(req));
+  res.json(data);
+});
+
 export const remove = asyncHandler(async (req: Request, res: Response) => {
   await totvsService.deleteTotvs(req.params['id'] as string, getUser(req));
   res.status(204).send();

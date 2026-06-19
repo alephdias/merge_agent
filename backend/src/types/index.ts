@@ -47,6 +47,7 @@ export interface BibliotecaTotvs {
   storage_path: string;
   hash: string;
   is_latest: boolean;
+  is_selected: boolean;
 }
 
 export interface FonteEmpresa {

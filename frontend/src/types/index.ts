@@ -33,6 +33,7 @@ export interface BibliotecaTotvs {
   uploader_email: string | null;
   hash: string;
   is_latest: boolean;
+  is_selected: boolean;
 }
 
 export interface FonteEmpresa extends Omit<BibliotecaTotvs, 'id'> {

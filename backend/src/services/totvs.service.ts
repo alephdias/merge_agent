@@ -68,6 +68,15 @@ export async function uploadTotvs(
   return { data: record, deduplicado: false };
 }
 
+export async function selectTotvs(id: string, user: AuthUser): Promise<BibliotecaTotvs> {
+  if (user.empresa_id !== null) {
+    throw new ForbiddenError('Apenas administradores podem alterar a versão selecionada');
+  }
+  const record = await totvsRepo.toggleSelected(id);
+  if (!record) throw new NotFoundError('Arquivo TOTVS não encontrado');
+  return record;
+}
+
 export async function deleteTotvs(id: string, user: AuthUser): Promise<void> {
   if (user.empresa_id !== null) {
     throw new ForbiddenError('Apenas administradores podem excluir arquivos TOTVS');
