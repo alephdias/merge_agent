@@ -11,7 +11,7 @@ export interface CreateMergeJobInput {
 
 const SELECT_COLS = `
   id, empresa_id, totvs_v_anterior_id, totvs_v_atual_id, fonte_empresa_id,
-  status, resultado_path, relatorio_html, error_message, created_at, completed_at, created_by
+  status, resultado_path, relatorio_html, analise_ia, error_message, created_at, completed_at, created_by
 `.trim();
 
 export async function create(data: CreateMergeJobInput): Promise<MergeJob> {
@@ -67,12 +67,13 @@ export async function updateDone(
   id: string,
   resultadoPath: string,
   relatorioHtml: string,
+  analiseIa: string,
 ): Promise<void> {
   await query(
     `UPDATE merge_jobs
-        SET status = 'done', resultado_path = $1, relatorio_html = $2, completed_at = now()
-      WHERE id = $3`,
-    [resultadoPath, relatorioHtml, id],
+        SET status = 'done', resultado_path = $1, relatorio_html = $2, analise_ia = $3, completed_at = now()
+      WHERE id = $4`,
+    [resultadoPath, relatorioHtml, analiseIa, id],
   );
 }
 

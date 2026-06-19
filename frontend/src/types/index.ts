@@ -62,6 +62,7 @@ export interface MergeJob {
   status: MergeJobStatus;
   resultado_path: string | null;
   relatorio_html: string | null;
+  analise_ia: string | null;
   error_message: string | null;
   created_at: string;
   completed_at: string | null;

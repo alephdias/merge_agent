@@ -18,8 +18,9 @@ export function RelatorioMerge() {
   const [job, setJob]           = useState<MergeJob | null>(null);
   const [loading, setLoading]   = useState(true);
   const [fetchError, setFetchError] = useState('');
-  const [downloading, setDownloading] = useState(false);
-  const [fullscreen, setFullscreen]   = useState(false);
+  const [downloading, setDownloading]   = useState(false);
+  const [fullscreen, setFullscreen]     = useState(false);
+  const [analiseOpen, setAnaliseOpen]   = useState(false);
 
   const loadJob = useCallback(async () => {
     if (!id) return;
@@ -67,6 +68,50 @@ export function RelatorioMerge() {
 
   const meta = job ? STATUS_META[job.status] : null;
 
+  function handleExportAnalise() {
+    if (!job?.analise_ia) return;
+    const blob = new Blob([job.analise_ia], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `analise_merge_${id?.slice(0, 8) ?? 'export'}.html`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
+  if (analiseOpen && job?.analise_ia) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#f5f7ff', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', background: '#0f1d3a', color: '#fff', flexShrink: 0 }}>
+          <button
+            onClick={() => setAnaliseOpen(false)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: 7, padding: '5px 10px', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}
+          >
+            <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
+            Voltar ao relatório
+          </button>
+          <span style={{ fontSize: 13, fontFamily: 'Inter, sans-serif', opacity: 0.7 }}>Análise Técnica IA</span>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={handleExportAnalise}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#2563eb', border: 'none', color: '#fff', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'Inter, sans-serif' }}
+          >
+            <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+            Baixar HTML
+          </button>
+        </div>
+        <iframe
+          srcDoc={job.analise_ia}
+          title="Análise IA"
+          style={{ flex: 1, border: 'none', display: 'block' }}
+          sandbox="allow-same-origin"
+        />
+      </div>
+    );
+  }
+
   if (fullscreen && job?.relatorio_html) {
     return (
       <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#fff', display: 'flex', flexDirection: 'column' }}>
@@ -107,6 +152,25 @@ export function RelatorioMerge() {
         </button>
         {job?.status === 'done' && (
           <div style={{ display: 'flex', gap: 8 }}>
+            {job.analise_ia && (
+              <button
+                onClick={() => setAnaliseOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  height: 38, padding: '0 16px', borderRadius: 8,
+                  border: '1.5px solid #7c3aed', background: '#f5f3ff', color: '#6d28d9',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#ede9fe'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#f5f3ff'; }}
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+                </svg>
+                Análise IA
+              </button>
+            )}
             <button
               onClick={() => setFullscreen(true)}
               style={{
