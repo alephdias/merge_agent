@@ -9,9 +9,11 @@ const router = Router();
 
 router.use(authMiddleware);
 
-router.get('/',           ctrl.list);
-router.get('/compare',    ctrl.compare);
-router.get('/:id',        ctrl.getOne);
+router.get('/',                    ctrl.list);
+router.get('/compare',             ctrl.compare);
+router.get('/comparativos',        ctrl.listCompare);
+router.get('/comparativos/:id',    ctrl.getCompare);
+router.get('/:id',                 ctrl.getOne);
 router.put('/:id/select', ctrl.select);
 router.delete('/:id',     ctrl.remove);
 router.post(

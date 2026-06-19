@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import api from '../services/api';
 import type { BibliotecaTotvs as Totvs } from '../types';
-import { formatDate } from '../utils/formatters';
+import { formatDate, formatDateTime } from '../utils/formatters';
 
 interface CompareAnalysis {
   adicionado: string[];
@@ -13,12 +14,27 @@ interface CompareAnalysis {
 }
 
 interface CompareResult {
+  cmp_id: string;
   v1: Totvs;
   v2: Totvs;
   oldCode: string;
   newCode: string;
   stats: { added: number; removed: number; unchanged: number };
   analysis: CompareAnalysis;
+}
+
+interface HistoryItem {
+  id: string;
+  v1_id: string;
+  v2_id: string;
+  v1_nome: string;
+  v1_pacote: string | null;
+  v1_data: string | null;
+  v2_nome: string;
+  v2_pacote: string | null;
+  v2_data: string | null;
+  stats: { added: number; removed: number; unchanged: number };
+  created_at: string;
 }
 
 function StatBadge({ count, label, color }: { count: number; label: string; color: string }) {
@@ -102,6 +118,7 @@ function VersionSelect({
 }
 
 export function ComparativoTotvs() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [versions, setVersions] = useState<Totvs[]>([]);
   const [v1Id, setV1Id] = useState('');
   const [v2Id, setV2Id] = useState('');
@@ -109,15 +126,34 @@ export function ComparativoTotvs() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showDiffOnly, setShowDiffOnly] = useState(true);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
+  // Carrega lista de versões e histórico
   useEffect(() => {
     void api.get<Totvs[]>('/totvs').then(({ data }) => {
       setVersions(data);
-      if (data.length >= 2) {
-        setV1Id(data[data.length - 1].id); // mais antigo
-        setV2Id(data[0].id);               // mais recente
+      if (data.length >= 2 && !searchParams.get('cmp')) {
+        setV1Id(data[data.length - 1].id);
+        setV2Id(data[0].id);
       }
     });
+    void api.get<HistoryItem[]>('/totvs/comparativos').then(({ data }) => setHistory(data));
+  }, []);
+
+  // Restaura do URL na montagem
+  useEffect(() => {
+    const cmpId = searchParams.get('cmp');
+    if (!cmpId) return;
+    setLoading(true);
+    api.get<CompareResult>(`/totvs/comparativos/${cmpId}`)
+      .then(({ data }) => {
+        setResult(data);
+        setV1Id(data.v1.id);
+        setV2Id(data.v2.id);
+      })
+      .catch(() => setError('Não foi possível restaurar o comparativo.'))
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleCompare() {
@@ -129,8 +165,29 @@ export function ComparativoTotvs() {
     try {
       const { data } = await api.get<CompareResult>(`/totvs/compare?v1=${v1Id}&v2=${v2Id}`);
       setResult(data);
+      setSearchParams({ cmp: data.cmp_id }, { replace: true });
+      // Atualiza histórico local
+      void api.get<HistoryItem[]>('/totvs/comparativos').then(({ data: h }) => setHistory(h));
     } catch {
       setError('Erro ao comparar versões. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleLoadHistory(item: HistoryItem) {
+    setShowHistory(false);
+    setLoading(true);
+    setError('');
+    setResult(null);
+    try {
+      const { data } = await api.get<CompareResult>(`/totvs/comparativos/${item.id}`);
+      setResult(data);
+      setV1Id(data.v1.id);
+      setV2Id(data.v2.id);
+      setSearchParams({ cmp: item.id }, { replace: true });
+    } catch {
+      setError('Erro ao carregar comparativo do histórico.');
     } finally {
       setLoading(false);
     }
@@ -153,11 +210,72 @@ export function ComparativoTotvs() {
     <div style={{ padding: '28px 32px', fontFamily: 'Inter, sans-serif', minHeight: '100%' }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#111827' }}>Comparativo TOTVS</h2>
-        <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6b7280' }}>
-          Compare duas versões do fonte padrão TOTVS e entenda o que mudou
-        </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#111827' }}>Comparativo TOTVS</h2>
+          <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6b7280' }}>
+            Compare duas versões do fonte padrão TOTVS e entenda o que mudou
+          </p>
+        </div>
+        {history.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowHistory((v) => !v)}
+              style={{
+                height: 36, padding: '0 14px', borderRadius: 8, border: '1.5px solid #e5e7eb',
+                background: showHistory ? '#f3f4f6' : '#fff', color: '#374151',
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.75" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" />
+              </svg>
+              Histórico ({history.length})
+            </button>
+
+            {showHistory && (
+              <div style={{
+                position: 'absolute', right: 0, top: 42, zIndex: 30,
+                width: 400, maxHeight: 380, overflowY: 'auto',
+                background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6', fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Comparações anteriores
+                </div>
+                {history.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => void handleLoadHistory(item)}
+                    style={{
+                      width: '100%', padding: '10px 16px', border: 'none', background: 'transparent',
+                      cursor: 'pointer', textAlign: 'left', borderBottom: '1px solid #f9fafb',
+                      fontFamily: 'Inter, sans-serif',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#f8faff'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 500, color: '#111827' }}>
+                        {item.v1_nome}
+                      </span>
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>→</span>
+                      <span style={{ fontSize: 11, color: '#6b7280' }}>
+                        {item.v1_pacote ?? item.v1_data ?? 'v1'} → {item.v2_pacote ?? item.v2_data ?? 'v2'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>+{item.stats.added}</span>
+                      <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>−{item.stats.removed}</span>
+                      <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>{formatDateTime(item.created_at)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Seletor */}

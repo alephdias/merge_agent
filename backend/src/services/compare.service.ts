@@ -3,6 +3,7 @@ import { diffLines } from 'diff';
 import { env } from '../config/env';
 import { downloadFile } from '../config/storage';
 import * as totvsRepo from '../repositories/totvs.repository';
+import * as comparativosRepo from '../repositories/comparativos.repository';
 import { NotFoundError } from '../errors/AppError';
 import type { BibliotecaTotvs } from '../types';
 
@@ -17,6 +18,7 @@ export interface CompareAnalysis {
 }
 
 export interface CompareResult {
+  cmp_id: string;
   v1: BibliotecaTotvs;
   v2: BibliotecaTotvs;
   oldCode: string;
@@ -25,7 +27,7 @@ export interface CompareResult {
   analysis: CompareAnalysis;
 }
 
-export async function compareTotvsVersions(id1: string, id2: string): Promise<CompareResult> {
+export async function compareTotvsVersions(id1: string, id2: string, createdBy?: string): Promise<CompareResult> {
   const [r1, r2] = await Promise.all([
     totvsRepo.findById(id1),
     totvsRepo.findById(id2),
@@ -72,9 +74,48 @@ export async function compareTotvsVersions(id1: string, id2: string): Promise<Co
     }
   }
 
+  const stats = { added, removed, unchanged };
   const analysis = await analyzeWithClaude(v1, v2, unifiedLines.join('\n').slice(0, 14000));
 
-  return { v1, v2, oldCode, newCode, stats: { added, removed, unchanged }, analysis };
+  const saved = await comparativosRepo.create({
+    v1_id: v1.id,
+    v2_id: v2.id,
+    stats,
+    analysis,
+    created_by: createdBy ?? null,
+  });
+
+  return { cmp_id: saved.id, v1, v2, oldCode, newCode, stats, analysis };
+}
+
+export async function loadComparativo(cmpId: string): Promise<CompareResult> {
+  const cmp = await comparativosRepo.findById(cmpId);
+  if (!cmp) throw new NotFoundError('Comparativo não encontrado');
+
+  const [v1, v2] = await Promise.all([
+    totvsRepo.findById(cmp.v1_id),
+    totvsRepo.findById(cmp.v2_id),
+  ]);
+  if (!v1 || !v2) throw new NotFoundError('Versões TOTVS do comparativo não encontradas');
+
+  const [buf1, buf2] = await Promise.all([
+    downloadFile(v1.storage_path),
+    downloadFile(v2.storage_path),
+  ]);
+
+  return {
+    cmp_id: cmp.id,
+    v1,
+    v2,
+    oldCode: buf1.toString('utf-8'),
+    newCode: buf2.toString('utf-8'),
+    stats: cmp.stats,
+    analysis: cmp.analysis,
+  };
+}
+
+export async function listComparativos() {
+  return comparativosRepo.findAll(20);
 }
 
 async function analyzeWithClaude(
