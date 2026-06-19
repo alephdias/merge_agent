@@ -37,17 +37,17 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 function DescricaoCell({ texto }: { texto: string | null }) {
   const [open, setOpen] = useState(false);
   if (!texto) return <span style={{ color: '#d1d5db' }}>—</span>;
-  const truncado = texto.length > 40;
+  const truncado = texto.length > 35;
   return (
-    <div style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>
-      <span style={{ fontSize: 13, color: '#6b7280' }}>
-        {truncado ? `${texto.slice(0, 40)}…` : texto}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+      <span style={{ fontSize: 13, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '1 1 0', minWidth: 0 }}>
+        {texto}
       </span>
       {truncado && (
         <>
           <button
             onClick={() => setOpen(true)}
-            style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 6px', borderRadius: 4, fontFamily: 'Inter, sans-serif' }}
+            style={{ flexShrink: 0, fontSize: 11, fontWeight: 500, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 6px', borderRadius: 4, fontFamily: 'Inter, sans-serif' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#eff6ff'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
           >
