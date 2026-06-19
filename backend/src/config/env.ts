@@ -10,6 +10,7 @@ const envSchema = z.object({
   SUPABASE_SERVICE_KEY: z.string().min(1, 'SUPABASE_SERVICE_KEY é obrigatório'),
   SUPABASE_STORAGE_BUCKET: z.string().min(1, 'SUPABASE_STORAGE_BUCKET é obrigatório'),
   ANTHROPIC_API_KEY: z.string().startsWith('sk-ant-', 'ANTHROPIC_API_KEY inválida'),
+  VOYAGE_API_KEY: z.string().startsWith('pa-', 'VOYAGE_API_KEY inválida (deve começar com pa-)'),
   ALLOWED_ORIGINS: z.string().min(1, 'ALLOWED_ORIGINS é obrigatório'),
 });
 

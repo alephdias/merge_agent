@@ -4,6 +4,8 @@ import { uploadFile } from '../config/storage';
 import * as fontesRepo from '../repositories/fontes.repository';
 import { ForbiddenError, NotFoundError } from '../errors/AppError';
 import * as empresasRepo from '../repositories/empresas.repository';
+import { indexFonteEmpresa } from './rag.service';
+import { logger } from '../utils/logger';
 import type { AuthUser, FonteEmpresa } from '../types';
 import type { UploadFonteInput } from '../schemas/fonte.schema';
 
@@ -55,6 +57,12 @@ export async function uploadFonte(
     uploaded_by: user.id,
     storage_path: storagePath,
     hash: fileHash,
+  });
+
+  // Indexação RAG em background — não bloqueia a resposta ao usuário
+  setImmediate(() => {
+    indexFonteEmpresa(record.id, empresaId, file.buffer.toString('utf-8'))
+      .catch((err: unknown) => logger.warn({ err, fonteId: record.id }, 'RAG: falha ao indexar fonte'));
   });
 
   return { data: record, deduplicado: false };

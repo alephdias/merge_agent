@@ -9,20 +9,43 @@ import * as mergesRepo from '../repositories/merges.repository';
 import * as totvsRepo from '../repositories/totvs.repository';
 import * as fontesRepo from '../repositories/fontes.repository';
 import * as empresasRepo from '../repositories/empresas.repository';
+import { retrieveContext, indexMergeResolution } from './rag.service';
 import { ForbiddenError, NotFoundError, ValidationError } from '../errors/AppError';
 import type { AuthUser, MergeJob } from '../types';
 import type { CreateMergeInput } from '../schemas/merge.schema';
 
 const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 
-// ─── Claude conflict resolver ────────────────────────────────────────────────
+// ─── Claude conflict resolver (com RAG) ─────────────────────────────────────
 
-async function resolveConflict(seg: ConflictSegment): Promise<string> {
+async function resolveConflict(
+  seg: ConflictSegment,
+  empresaId: string,
+  jobId: string,
+): Promise<string> {
+  // 1. Busca contexto histórico isolado por empresa_id
+  const ragContext = await retrieveContext(
+    empresaId,
+    seg.blockName,
+    seg.empresaContent ?? seg.totvsContent ?? '',
+  );
+
   const lines: string[] = [
-    `You are an expert AdvPL/TLPP developer. Resolve the following three-way merge conflict.`,
+    'You are an expert AdvPL/TLPP developer. Resolve the following three-way merge conflict.',
     `Block name: ${seg.blockName}`,
     '',
   ];
+
+  // 2. Injeta contexto RAG no topo do prompt quando disponível
+  if (ragContext) {
+    lines.push(ragContext);
+    lines.push('');
+    lines.push(
+      'Use the historical context above to understand this company\'s coding style and past merge decisions. ' +
+      'Apply the same patterns when resolving the conflict below.',
+    );
+    lines.push('');
+  }
 
   if (seg.ancestorContent !== null) {
     lines.push('ANCESTOR (original TOTVS base):');
@@ -63,8 +86,21 @@ async function resolveConflict(seg: ConflictSegment): Promise<string> {
   });
 
   const textBlock = response.content.find((c) => c.type === 'text');
-  if (textBlock?.type === 'text') return textBlock.text;
-  return seg.totvsContent ?? seg.empresaContent ?? '';
+  const resolved  = textBlock?.type === 'text' ? textBlock.text : (seg.totvsContent ?? seg.empresaContent ?? '');
+
+  // 3. Indexa resolução para aprendizado futuro (fire-and-forget, isolado por empresa_id)
+  setImmediate(() => {
+    const summary = [
+      seg.ancestorContent ? `ANCESTOR:\n${seg.ancestorContent.slice(0, 300)}` : '',
+      seg.totvsContent    ? `TOTVS:\n${seg.totvsContent.slice(0, 300)}`        : 'TOTVS: bloco removido',
+      seg.empresaContent  ? `EMPRESA:\n${seg.empresaContent.slice(0, 300)}`    : 'EMPRESA: bloco removido',
+    ].filter(Boolean).join('\n\n');
+
+    indexMergeResolution(jobId, empresaId, seg.blockName, summary, resolved)
+      .catch((err: unknown) => logger.warn({ err, jobId, blockName: seg.blockName }, 'RAG: falha ao indexar resolução'));
+  });
+
+  return resolved;
 }
 
 // ─── HTML report generator ───────────────────────────────────────────────────
@@ -200,8 +236,8 @@ async function processMergeJob(jobId: string): Promise<void> {
   const resolvedMap = new Map<string, string>();
   for (const seg of segments) {
     if (seg.kind === 'conflict') {
-      logger.info({ jobId, blockName: seg.blockName }, 'Resolvendo conflito com Claude');
-      const resolved = await resolveConflict(seg);
+      logger.info({ jobId, blockName: seg.blockName }, 'Resolvendo conflito com Claude + RAG');
+      const resolved = await resolveConflict(seg, job.empresa_id, jobId);
       resolvedMap.set(seg.blockName, resolved);
     }
   }

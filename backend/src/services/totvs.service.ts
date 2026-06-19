@@ -3,6 +3,8 @@ import { sha256 } from '../utils/hash';
 import { uploadFile } from '../config/storage';
 import * as totvsRepo from '../repositories/totvs.repository';
 import { ForbiddenError } from '../errors/AppError';
+import { indexBibliotecaTotvs } from './rag.service';
+import { logger } from '../utils/logger';
 import type { AuthUser, BibliotecaTotvs } from '../types';
 import type { UploadFonteInput } from '../schemas/fonte.schema';
 
@@ -48,6 +50,12 @@ export async function uploadTotvs(
     uploaded_by: user.id,
     storage_path: storagePath,
     hash: fileHash,
+  });
+
+  // Indexação RAG em background — empresa_id = NULL (conhecimento global TOTVS)
+  setImmediate(() => {
+    indexBibliotecaTotvs(record.id, file.buffer.toString('utf-8'))
+      .catch((err: unknown) => logger.warn({ err, totvsId: record.id }, 'RAG: falha ao indexar TOTVS'));
   });
 
   return { data: record, deduplicado: false };
