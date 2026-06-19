@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env';
+import { ForbiddenError } from './errors/AppError';
 import { globalRateLimit } from './middleware/rateLimit.middleware';
 import { requestIdMiddleware } from './middleware/requestId.middleware';
 import { errorMiddleware } from './middleware/error.middleware';
@@ -39,7 +40,7 @@ export function createApp(): express.Application {
     cors({
       origin: (origin, cb) => {
         if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-        cb(new Error(`Origin '${origin}' não autorizada pelo CORS`));
+        cb(new ForbiddenError(`Origin '${origin}' não autorizada pelo CORS`));
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
