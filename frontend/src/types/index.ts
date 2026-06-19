@@ -30,6 +30,7 @@ export interface BibliotecaTotvs {
   numero_pacote: string | null;
   descricao: string | null;
   uploaded_by: string;
+  uploader_email: string | null;
   hash: string;
   is_latest: boolean;
 }

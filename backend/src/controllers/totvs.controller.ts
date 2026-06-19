@@ -33,3 +33,8 @@ export const upload = asyncHandler(async (req: Request, res: Response) => {
 
   res.status(result.deduplicado ? 200 : 201).json(result);
 });
+
+export const remove = asyncHandler(async (req: Request, res: Response) => {
+  await totvsService.deleteTotvs(req.params['id'] as string, getUser(req));
+  res.status(204).send();
+});

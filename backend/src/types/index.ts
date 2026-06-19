@@ -43,6 +43,7 @@ export interface BibliotecaTotvs {
   numero_pacote: string | null;
   descricao: string | null;
   uploaded_by: string;
+  uploader_email: string | null;
   storage_path: string;
   hash: string;
   is_latest: boolean;
@@ -57,6 +58,7 @@ export interface FonteEmpresa {
   numero_pacote: string | null;
   descricao: string | null;
   uploaded_by: string;
+  uploader_email: string | null;
   storage_path: string;
   hash: string;
   is_latest: boolean;

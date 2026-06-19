@@ -34,6 +34,89 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
+function DescricaoCell({ texto }: { texto: string | null }) {
+  const [open, setOpen] = useState(false);
+  if (!texto) return <span style={{ color: '#d1d5db' }}>—</span>;
+  const truncado = texto.length > 40;
+  return (
+    <div style={{ position: 'relative' }}>
+      <span style={{ fontSize: 13, color: '#6b7280' }}>
+        {truncado ? `${texto.slice(0, 40)}…` : texto}
+      </span>
+      {truncado && (
+        <>
+          <button
+            onClick={() => setOpen(true)}
+            style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 6px', borderRadius: 4, fontFamily: 'Inter, sans-serif' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#eff6ff'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+          >
+            ver
+          </button>
+          {open && (
+            <div
+              onClick={() => setOpen(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.25)' }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 400, boxShadow: '0 8px 32px rgba(0,0,0,0.15)', border: '1px solid #e5e7eb' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Descrição completa</span>
+                  <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex' }}>
+                    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{texto}</p>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function DeleteBtn({ onConfirm, loading }: { onConfirm: () => void; loading: boolean }) {
+  const [confirm, setConfirm] = useState(false);
+
+  if (confirm) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 11, color: '#dc2626', whiteSpace: 'nowrap' }}>Excluir?</span>
+        <button
+          onClick={() => { setConfirm(false); onConfirm(); }}
+          disabled={loading}
+          style={{ height: 24, padding: '0 8px', borderRadius: 5, border: 'none', background: '#dc2626', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+        >
+          Sim
+        </button>
+        <button
+          onClick={() => setConfirm(false)}
+          style={{ height: 24, padding: '0 8px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#6b7280', fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+        >
+          Não
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setConfirm(true)}
+      title="Excluir"
+      style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid #e5e7eb', background: 'transparent', color: '#9ca3af', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#fecaca'; e.currentTarget.style.color = '#dc2626'; e.currentTarget.style.background = '#fef2f2'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.color = '#9ca3af'; e.currentTarget.style.background = 'transparent'; }}
+    >
+      <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+      </svg>
+    </button>
+  );
+}
+
 function FieldInput({ label, value, onChange, placeholder, type = 'text' }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
 }) {
@@ -67,6 +150,7 @@ export function BibliotecaTotvs() {
   const [formError, setFormError] = useState('');
   const [uploadMsg, setUploadMsg] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -112,13 +196,27 @@ export function BibliotecaTotvs() {
     }
   }
 
+  async function handleDelete(id: string) {
+    setDeleting(id);
+    try {
+      await api.delete(`/totvs/${id}`);
+      setList((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao excluir arquivo');
+    } finally {
+      setDeleting(null);
+    }
+  }
+
   return (
     <div style={{ padding: '28px 32px', fontFamily: 'Inter, sans-serif' }}>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#111827' }}>Biblioteca TOTVS</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6b7280' }}>{list.length} versão{list.length !== 1 ? 'ões' : ''} disponível{list.length !== 1 ? 'eis' : ''}</p>
+          <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6b7280' }}>
+            {list.length} versão{list.length !== 1 ? 'ões' : ''} disponível{list.length !== 1 ? 'eis' : ''}
+          </p>
         </div>
         {isAdmin && (
           <button
@@ -151,7 +249,15 @@ export function BibliotecaTotvs() {
       )}
 
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-        {error && <p style={{ padding: '16px 20px', color: '#dc2626', fontSize: 13 }}>{error}</p>}
+        {error && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', background: '#fef2f2', borderBottom: '1px solid #fecaca' }}>
+            <svg width="13" height="13" fill="none" stroke="#dc2626" strokeWidth="2" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+            </svg>
+            <span style={{ fontSize: 13, color: '#dc2626' }}>{error}</span>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
@@ -167,8 +273,8 @@ export function BibliotecaTotvs() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f9fafb' }}>
-                {['Arquivo', 'Data Pacote', 'Nº Pacote', 'Descrição', 'Upload', 'Status'].map((h) => (
-                  <th key={h} style={{ padding: '10px 20px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>{h}</th>
+                {['Arquivo', 'Data Pacote', 'Nº Pacote', 'Descrição', 'Upload por', 'Enviado em', 'Status', ''].map((h) => (
+                  <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -180,7 +286,8 @@ export function BibliotecaTotvs() {
                   onMouseEnter={(el) => { el.currentTarget.style.background = '#f8faff'; }}
                   onMouseLeave={(el) => { el.currentTarget.style.background = 'transparent'; }}
                 >
-                  <td style={{ padding: '12px 20px' }}>
+                  {/* Arquivo */}
+                  <td style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ width: 28, height: 28, borderRadius: 6, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <svg width="13" height="13" fill="none" stroke="#2563eb" strokeWidth="1.75" viewBox="0 0 24 24">
@@ -190,13 +297,45 @@ export function BibliotecaTotvs() {
                       <span style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{r.nome_arquivo}</span>
                     </div>
                   </td>
-                  <td style={{ padding: '12px 20px', fontSize: 13, color: '#6b7280' }}>{formatDate(r.data_pacote)}</td>
-                  <td style={{ padding: '12px 20px', fontSize: 13, color: '#6b7280' }}>{r.numero_pacote ?? '—'}</td>
-                  <td style={{ padding: '12px 20px', fontSize: 13, color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.descricao ?? '—'}</td>
-                  <td style={{ padding: '12px 20px', fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>{formatDateTime(r.data_upload)}</td>
-                  <td style={{ padding: '12px 20px' }}>
+
+                  {/* Data Pacote */}
+                  <td style={{ padding: '12px 16px', fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>{formatDate(r.data_pacote)}</td>
+
+                  {/* Nº Pacote */}
+                  <td style={{ padding: '12px 16px', fontSize: 12, color: '#6b7280', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.numero_pacote ?? '—'}</td>
+
+                  {/* Descrição */}
+                  <td style={{ padding: '12px 16px', maxWidth: 220 }}>
+                    <DescricaoCell texto={r.descricao} />
+                  </td>
+
+                  {/* Upload por */}
+                  <td style={{ padding: '12px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                        {(r.uploader_email ?? '?').charAt(0).toUpperCase()}
+                      </div>
+                      <span style={{ fontSize: 12, color: '#6b7280' }}>{r.uploader_email ?? '—'}</span>
+                    </div>
+                  </td>
+
+                  {/* Enviado em */}
+                  <td style={{ padding: '12px 16px', fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>{formatDateTime(r.data_upload)}</td>
+
+                  {/* Status */}
+                  <td style={{ padding: '12px 16px' }}>
                     {r.is_latest && (
                       <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 20, background: '#f0fdf4', color: '#16a34a', fontSize: 11, fontWeight: 600 }}>Atual</span>
+                    )}
+                  </td>
+
+                  {/* Ações */}
+                  <td style={{ padding: '12px 16px' }}>
+                    {isAdmin && (
+                      <DeleteBtn
+                        onConfirm={() => void handleDelete(r.id)}
+                        loading={deleting === r.id}
+                      />
                     )}
                   </td>
                 </tr>
@@ -211,13 +350,9 @@ export function BibliotecaTotvs() {
           <form onSubmit={(e) => void handleUpload(e)} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Arquivo (.prw / .tlpp / .prx) *</label>
-              <div style={{ border: '1.5px dashed #d1d5db', borderRadius: 8, padding: '16px', textAlign: 'center', cursor: 'pointer', background: '#f9fafb' }}>
-                <input
-                  type="file" accept=".prw,.tlpp,.prx" required
-                  style={{ display: 'none' }}
-                  id="file-input-totvs"
-                  onChange={(e) => setForm((prev) => ({ ...prev, arquivo: e.target.files?.[0] ?? null }))}
-                />
+              <div style={{ border: '1.5px dashed #d1d5db', borderRadius: 8, padding: '16px', textAlign: 'center', background: '#f9fafb' }}>
+                <input type="file" accept=".prw,.tlpp,.prx" required style={{ display: 'none' }} id="file-input-totvs"
+                  onChange={(e) => setForm((prev) => ({ ...prev, arquivo: e.target.files?.[0] ?? null }))} />
                 <label htmlFor="file-input-totvs" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                   <svg width="20" height="20" fill="none" stroke="#9ca3af" strokeWidth="1.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
@@ -232,9 +367,7 @@ export function BibliotecaTotvs() {
             <FieldInput label="Data do Pacote" type="date" value={form.data_pacote} onChange={(v) => setForm((p) => ({ ...p, data_pacote: v }))} />
             <FieldInput label="Número do Pacote" value={form.numero_pacote} onChange={(v) => setForm((p) => ({ ...p, numero_pacote: v }))} placeholder="Ex: 12.1.33" />
             <FieldInput label="Descrição" value={form.descricao} onChange={(v) => setForm((p) => ({ ...p, descricao: v }))} placeholder="Resumo das alterações" />
-            {formError && (
-              <p style={{ fontSize: 13, color: '#dc2626', margin: 0 }}>{formError}</p>
-            )}
+            {formError && <p style={{ fontSize: 13, color: '#dc2626', margin: 0 }}>{formError}</p>}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
               <button type="button" onClick={() => { setShowModal(false); setForm(EMPTY_FORM); }}
                 style={{ height: 38, padding: '0 16px', borderRadius: 8, border: '1.5px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
