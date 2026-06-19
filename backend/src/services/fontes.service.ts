@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { sha256 } from '../utils/hash';
-import { uploadFile } from '../config/storage';
+import { uploadFile, deleteFile } from '../config/storage';
 import * as fontesRepo from '../repositories/fontes.repository';
-import { ForbiddenError, NotFoundError } from '../errors/AppError';
+import { ForbiddenError, NotFoundError, ValidationError } from '../errors/AppError';
 import * as empresasRepo from '../repositories/empresas.repository';
 import { indexFonteEmpresa } from './rag.service';
 import { logger } from '../utils/logger';
@@ -66,4 +66,32 @@ export async function uploadFonte(
   });
 
   return { data: record, deduplicado: false };
+}
+
+export async function selectFonte(id: string, empresaId: string, user: AuthUser): Promise<FonteEmpresa> {
+  assertEmpresaAccess(user, empresaId);
+  const record = await fontesRepo.toggleSelected(id, empresaId);
+  if (!record) throw new NotFoundError('Fonte não encontrado');
+  return record;
+}
+
+export async function deleteFonte(id: string, empresaId: string, user: AuthUser): Promise<void> {
+  assertEmpresaAccess(user, empresaId);
+
+  const record = await fontesRepo.findById(id, empresaId);
+  if (!record) throw new NotFoundError('Fonte não encontrado');
+
+  const deleted = await fontesRepo.deleteById(id, empresaId).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('foreign key') || msg.includes('violates')) {
+      throw new ValidationError('Este fonte está vinculado a um merge existente e não pode ser excluído');
+    }
+    throw err;
+  });
+
+  if (!deleted) throw new NotFoundError('Fonte não encontrado');
+
+  await deleteFile(record.storage_path).catch((err: unknown) =>
+    logger.warn({ err, id }, 'Fontes: falha ao deletar arquivo do storage'),
+  );
 }

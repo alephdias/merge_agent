@@ -63,6 +63,7 @@ export interface FonteEmpresa {
   storage_path: string;
   hash: string;
   is_latest: boolean;
+  is_selected: boolean;
 }
 
 export type MergeJobStatus = 'pending' | 'processing' | 'done' | 'error';

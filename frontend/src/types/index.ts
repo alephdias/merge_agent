@@ -36,9 +36,19 @@ export interface BibliotecaTotvs {
   is_selected: boolean;
 }
 
-export interface FonteEmpresa extends Omit<BibliotecaTotvs, 'id'> {
+export interface FonteEmpresa {
   id: string;
   empresa_id: string;
+  nome_arquivo: string;
+  data_pacote: string | null;
+  data_upload: string;
+  numero_pacote: string | null;
+  descricao: string | null;
+  uploaded_by: string;
+  uploader_email: string | null;
+  hash: string;
+  is_latest: boolean;
+  is_selected: boolean;
 }
 
 export type MergeJobStatus = 'pending' | 'processing' | 'done' | 'error';

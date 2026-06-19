@@ -9,7 +9,9 @@ const router = Router({ mergeParams: true });
 
 router.use(authMiddleware);
 
-router.get('/',  ctrl.list);
+router.get('/',           ctrl.list);
+router.put('/:id/select', ctrl.select);
+router.delete('/:id',     ctrl.remove);
 router.post(
   '/upload',
   uploadMiddleware.single('arquivo'),
