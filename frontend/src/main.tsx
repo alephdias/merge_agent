@@ -11,6 +11,7 @@ import { FontesEmpresa } from './pages/FontesEmpresa';
 import { NovoMerge } from './pages/NovoMerge';
 import { HistoricoMerges } from './pages/HistoricoMerges';
 import { RelatorioMerge } from './pages/RelatorioMerge';
+import { ComparativoTotvs } from './pages/ComparativoTotvs';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Root element não encontrado');
@@ -25,6 +26,7 @@ ReactDOM.createRoot(root).render(
         <Route path="/empresas/:id" element={<ProtectedRoute><EmpresaDetalhe /></ProtectedRoute>} />
         <Route path="/empresas/:id/fontes" element={<ProtectedRoute><FontesEmpresa /></ProtectedRoute>} />
         <Route path="/totvs" element={<ProtectedRoute><BibliotecaTotvs /></ProtectedRoute>} />
+        <Route path="/totvs/comparativo" element={<ProtectedRoute><ComparativoTotvs /></ProtectedRoute>} />
         <Route path="/merges" element={<ProtectedRoute><HistoricoMerges /></ProtectedRoute>} />
         <Route path="/merges/novo" element={<ProtectedRoute><NovoMerge /></ProtectedRoute>} />
         <Route path="/merges/:id/relatorio" element={<ProtectedRoute><RelatorioMerge /></ProtectedRoute>} />
