@@ -312,14 +312,35 @@ export async function createMergeJob(
   const fonte = await fontesRepo.findLatestByEmpresa(empresaId);
   if (!fonte) throw new ValidationError('Empresa não possui fontes cadastradas. Envie um arquivo primeiro.');
 
-  // Resolve TOTVS versions by the same nome_arquivo as the fonte
+  // Resolve TOTVS versions: exact name match → fallback to any latest
   let totvsAtualId: string | null = input.totvs_v_atual_id ?? null;
   let totvsAnteriorId: string | null = input.totvs_v_anterior_id ?? null;
 
   if (!totvsAtualId) {
-    const versions = await totvsRepo.findLatestTwoByNomeArquivo(fonte.nome_arquivo);
+    let versions = await totvsRepo.findLatestTwoByNomeArquivo(fonte.nome_arquivo);
+
+    // Fallback: nome pode diferir (ex: empresa envia "nfesefaz.prw", biblioteca tem "nfesefaz_totvs.prw")
+    // Tenta match sem extensão e case-insensitive
     if (versions.length === 0) {
-      throw new ValidationError(`Nenhuma versão TOTVS cadastrada para o arquivo "${fonte.nome_arquivo}".`);
+      const baseName = fonte.nome_arquivo.replace(/\.[^.]+$/, '').toLowerCase();
+      const allTotvs = await totvsRepo.findAll();
+      const matched = allTotvs.filter((t) =>
+        t.nome_arquivo.replace(/\.[^.]+$/, '').toLowerCase().includes(baseName) ||
+        baseName.includes(t.nome_arquivo.replace(/\.[^.]+$/, '').toLowerCase()),
+      );
+      // Ordena: is_selected primeiro, depois is_latest, depois mais recente
+      matched.sort((a, b) => {
+        if (a.is_selected !== b.is_selected) return a.is_selected ? -1 : 1;
+        if (a.is_latest !== b.is_latest) return a.is_latest ? -1 : 1;
+        return new Date(b.data_upload).getTime() - new Date(a.data_upload).getTime();
+      });
+      versions = matched.slice(0, 2);
+    }
+
+    if (versions.length === 0) {
+      throw new ValidationError(
+        'Nenhuma versão TOTVS encontrada na biblioteca. Envie o fonte padrão TOTVS antes de executar o merge.',
+      );
     }
     totvsAtualId    = versions[0]?.id ?? null;
     totvsAnteriorId = versions[1]?.id ?? null;

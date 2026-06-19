@@ -37,7 +37,9 @@ api.interceptors.response.use(
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     if (error.response?.status !== 401 || original._retry) {
-      return Promise.reject(error);
+      // Extrai mensagem real do backend (ex: ValidationError, NotFoundError)
+      const apiMsg = (error.response?.data as { error?: string } | undefined)?.error;
+      return Promise.reject(apiMsg ? new Error(apiMsg) : error);
     }
 
     if (isRefreshing) {
