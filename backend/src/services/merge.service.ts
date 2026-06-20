@@ -228,19 +228,36 @@ ${rows}
 
 interface ConflictAnalysis {
   nome: string;
-  o_que_totvs_mudou: string;
-  o_que_empresa_customizou: string;
-  por_que_conflito: string;
-  como_resolvido: string;
+  descricao_funcao: string;
+  analise_mudanca_totvs: string;
+  analise_customizacao_empresa: string;
+  analise_conflito: string;
+  analise_resolucao: string;
+  impacto_sistema: string;
+  referencias_totvs: string;
   risco: 'baixo' | 'médio' | 'alto';
-  risco_explicacao: string;
+  risco_justificativa: string;
+  testes_obrigatorios: string[];
+  pontos_atencao: string[];
+}
+
+interface CustomizacaoAnalysis {
+  nome: string;
+  descricao: string;
+  natureza_customizacao: string;
+  impacto_negocial: string;
+  classificacao: string;
+  risco_proxima_atualizacao: string;
 }
 
 interface MergeAnalysisJson {
+  visao_geral_arquivo: string;
   resumo_executivo: string;
   conflitos: ConflictAnalysis[];
-  customizacoes_resumo: string;
+  customizacoes_detalhadas: CustomizacaoAnalysis[];
   recomendacoes: string[];
+  plano_testes: string[];
+  conclusao: string;
 }
 
 function escapeHtmlDoc(s: string): string {
@@ -251,65 +268,164 @@ function escapeHtmlDoc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+interface EmpresaSegData { blockName: string; content: string }
+
+function codeBlock(label: string, labelColor: string, borderColor: string, code: string, openByDefault = false): string {
+  return `<details${openByDefault ? ' open' : ''} style="margin-bottom:6px">
+  <summary style="cursor:pointer;padding:9px 14px;background:${labelColor};color:#fff;font-family:'Courier New',monospace;font-size:12px;font-weight:600;border-radius:6px;list-style:none;display:flex;align-items:center;gap:6px;user-select:none;border-left:4px solid ${borderColor}">
+    ▶ ${label}
+  </summary>
+  <pre style="margin:0;padding:14px 16px;background:#1a1f2e;color:#e2e8f0;font-size:12px;line-height:1.55;overflow-x:auto;border-radius:0 0 6px 6px;white-space:pre;tab-size:2;border:1px solid #2d3748;border-top:none">${escapeHtmlDoc(code)}</pre>
+</details>`;
+}
+
 function buildAnaliseHtml(
   json: MergeAnalysisJson,
+  conflictSegs: ConflictSegment[],
+  resolvedMap: Map<string, string>,
+  empresaSegs: EmpresaSegData[],
   stats: Record<ChangeCategory, number>,
   empresaNome: string,
   fonteNome: string,
   dataStr: string,
 ): string {
-  const riskColor = (r: string) =>
-    r === 'alto' ? '#dc2626' : r === 'médio' ? '#d97706' : '#16a34a';
-  const riskBg = (r: string) =>
-    r === 'alto' ? '#fef2f2' : r === 'médio' ? '#fffbeb' : '#f0fdf4';
-  const riskBorder = (r: string) =>
-    r === 'alto' ? '#fecaca' : r === 'médio' ? '#fde68a' : '#bbf7d0';
+  const riskColor  = (r: string) => r === 'alto' ? '#dc2626' : r === 'médio' ? '#d97706' : '#16a34a';
+  const riskBg     = (r: string) => r === 'alto' ? '#fef2f2' : r === 'médio' ? '#fffbeb' : '#f0fdf4';
+  const riskBorder = (r: string) => r === 'alto' ? '#fecaca' : r === 'médio' ? '#fde68a' : '#bbf7d0';
 
-  const statsCard = (label: string, count: number, bg: string, border: string, text: string) =>
-    `<div style="background:${bg};border:1.5px solid ${border};color:${text};border-radius:10px;padding:12px 20px;display:flex;flex-direction:column;gap:2px;min-width:140px">
-      <span style="font-size:24px;font-weight:800;font-family:Inter,sans-serif">${count}</span>
-      <span style="font-size:11px;font-weight:600;font-family:Inter,sans-serif;opacity:.8">${label}</span>
+  const statCard = (label: string, n: number, bg: string, border: string, color: string) =>
+    `<div style="background:${bg};border:2px solid ${border};color:${color};border-radius:10px;padding:14px 20px;min-width:130px;text-align:center">
+      <div style="font-size:28px;font-weight:800;font-family:Inter,sans-serif">${n}</div>
+      <div style="font-size:11px;font-weight:600;margin-top:2px;opacity:.85">${label}</div>
     </div>`;
 
-  const conflictsHtml = json.conflitos.map((c, i) => `
-    <div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:20px;box-shadow:0 1px 6px rgba(0,0,0,.06)">
-      <div style="background:linear-gradient(135deg,#991b1b,#dc2626);padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">Conflito ${i + 1}</span>
-          <h3 style="margin:2px 0 0;font-size:16px;font-weight:700;color:#fff;font-family:'Courier New',monospace">${escapeHtmlDoc(c.nome)}</h3>
-        </div>
-        <div style="background:${riskBg(c.risco)};border:1.5px solid ${riskBorder(c.risco)};color:${riskColor(c.risco)};padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;font-family:Inter,sans-serif;white-space:nowrap">
-          Risco ${c.risco}
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #f3f4f6">
-        <div style="padding:16px 20px;border-right:1px solid #f3f4f6">
-          <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.05em;font-family:Inter,sans-serif">O que a TOTVS mudou</p>
-          <p style="margin:0;font-size:13.5px;color:#374151;line-height:1.65;font-family:Inter,sans-serif">${escapeHtmlDoc(c.o_que_totvs_mudou)}</p>
-        </div>
-        <div style="padding:16px 20px">
-          <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;font-family:Inter,sans-serif">O que a empresa havia customizado</p>
-          <p style="margin:0;font-size:13.5px;color:#374151;line-height:1.65;font-family:Inter,sans-serif">${escapeHtmlDoc(c.o_que_empresa_customizou)}</p>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #f3f4f6">
-        <div style="padding:16px 20px;border-right:1px solid #f3f4f6">
-          <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;font-family:Inter,sans-serif">Por que houve conflito</p>
-          <p style="margin:0;font-size:13.5px;color:#374151;line-height:1.65;font-family:Inter,sans-serif">${escapeHtmlDoc(c.por_que_conflito)}</p>
-        </div>
-        <div style="padding:16px 20px">
-          <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;font-family:Inter,sans-serif">Como a IA resolveu</p>
-          <p style="margin:0;font-size:13.5px;color:#374151;line-height:1.65;font-family:Inter,sans-serif">${escapeHtmlDoc(c.como_resolvido)}</p>
-        </div>
-      </div>
-      <div style="padding:12px 20px;background:#fafafa;display:flex;align-items:flex-start;gap:8px">
-        <svg width="14" height="14" fill="none" stroke="${riskColor(c.risco)}" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"/></svg>
-        <p style="margin:0;font-size:12.5px;color:#6b7280;line-height:1.55;font-family:Inter,sans-serif"><strong style="color:${riskColor(c.risco)}">Atenção:</strong> ${escapeHtmlDoc(c.risco_explicacao)}</p>
-      </div>
-    </div>`).join('\n');
+  const conflictsHtml = (json.conflitos ?? []).map((c, i) => {
+    const seg = conflictSegs.find((s) => s.blockName === c.nome);
+    const resolved = resolvedMap.get(c.nome) ?? '';
 
-  const recsHtml = json.recomendacoes.map((r) =>
-    `<li style="padding:8px 0;font-size:14px;color:#374151;line-height:1.6;font-family:Inter,sans-serif;border-bottom:1px solid #f3f4f6">${escapeHtmlDoc(r)}</li>`,
+    const codesHtml = [
+      seg?.ancestorContent ? codeBlock('Versão Base TOTVS (ancestor — ponto de partida comum)', '#374151', '#6b7280', seg.ancestorContent) : '',
+      seg?.totvsContent    ? codeBlock('Nova Versão TOTVS (o que a TOTVS atualizou)', '#1d4ed8', '#3b82f6', seg.totvsContent) : `<div style="padding:10px 14px;background:#f0f9ff;border-radius:6px;font-size:13px;color:#0369a1">⚠ Bloco removido pela TOTVS nesta versão.</div>`,
+      seg?.empresaContent  ? codeBlock('Versão da Empresa (customização)', '#166534', '#22c55e', seg.empresaContent) : `<div style="padding:10px 14px;background:#f0fdf4;border-radius:6px;font-size:13px;color:#166534">⚠ Empresa havia removido este bloco.</div>`,
+      resolved ? codeBlock('Resultado do Merge — Resolução IA', '#5b21b6', '#a855f7', resolved, true) : '',
+    ].filter(Boolean).join('\n');
+
+    const testList = (c.testes_obrigatorios ?? []).map((t) =>
+      `<li style="padding:5px 0;font-size:13px;color:#374151;line-height:1.6;border-bottom:1px solid #f3f4f6">${escapeHtmlDoc(t)}</li>`).join('');
+    const atencaoList = (c.pontos_atencao ?? []).map((p) =>
+      `<li style="padding:4px 0;font-size:13px;color:#92400e">${escapeHtmlDoc(p)}</li>`).join('');
+
+    return `<div style="background:#fff;border-radius:14px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:28px;box-shadow:0 2px 12px rgba(0,0,0,.07)">
+
+  <!-- Conflict header -->
+  <div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <div>
+      <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.08em;font-family:Inter,sans-serif">Conflito ${i + 1} de ${json.conflitos.length}</span>
+      <h3 style="margin:3px 0 0;font-size:18px;font-weight:700;color:#fff;font-family:'Courier New',monospace;word-break:break-all">${escapeHtmlDoc(c.nome)}</h3>
+    </div>
+    <div style="flex-shrink:0;background:${riskBg(c.risco)};border:2px solid ${riskBorder(c.risco)};color:${riskColor(c.risco)};padding:5px 16px;border-radius:20px;font-size:12px;font-weight:700;font-family:Inter,sans-serif;white-space:nowrap">
+      ⚠ Risco ${c.risco}
+    </div>
+  </div>
+
+  <!-- Function description -->
+  <div style="padding:16px 24px;background:#fafafa;border-bottom:1px solid #f3f4f6">
+    <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">Sobre esta função</p>
+    <p style="margin:0;font-size:14px;color:#374151;line-height:1.7;font-family:Inter,sans-serif">${escapeHtmlDoc(c.descricao_funcao ?? '')}</p>
+    ${c.referencias_totvs ? `<p style="margin:8px 0 0;font-size:12px;color:#6b7280;font-style:italic;font-family:Inter,sans-serif">📚 ${escapeHtmlDoc(c.referencias_totvs)}</p>` : ''}
+  </div>
+
+  <!-- Analysis 2x2 grid -->
+  <div style="display:grid;grid-template-columns:1fr 1fr">
+    <div style="padding:18px 24px;border-right:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6">
+      <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">🔵 O que a TOTVS mudou</p>
+      <p style="margin:0;font-size:13.5px;color:#374151;line-height:1.7;font-family:Inter,sans-serif;white-space:pre-wrap">${escapeHtmlDoc(c.analise_mudanca_totvs ?? '')}</p>
+    </div>
+    <div style="padding:18px 24px;border-bottom:1px solid #f3f4f6">
+      <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">🟢 Customização da empresa</p>
+      <p style="margin:0;font-size:13.5px;color:#374151;line-height:1.7;font-family:Inter,sans-serif;white-space:pre-wrap">${escapeHtmlDoc(c.analise_customizacao_empresa ?? '')}</p>
+    </div>
+    <div style="padding:18px 24px;border-right:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6">
+      <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">🔴 Por que conflitou</p>
+      <p style="margin:0;font-size:13.5px;color:#374151;line-height:1.7;font-family:Inter,sans-serif;white-space:pre-wrap">${escapeHtmlDoc(c.analise_conflito ?? '')}</p>
+    </div>
+    <div style="padding:18px 24px;border-bottom:1px solid #f3f4f6">
+      <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">🟣 Como a IA resolveu</p>
+      <p style="margin:0;font-size:13.5px;color:#374151;line-height:1.7;font-family:Inter,sans-serif;white-space:pre-wrap">${escapeHtmlDoc(c.analise_resolucao ?? '')}</p>
+    </div>
+  </div>
+
+  <!-- System impact -->
+  ${c.impacto_sistema ? `<div style="padding:14px 24px;background:#eff6ff;border-bottom:1px solid #bfdbfe">
+    <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">Impacto no sistema</p>
+    <p style="margin:0;font-size:13.5px;color:#1e40af;line-height:1.65;font-family:Inter,sans-serif">${escapeHtmlDoc(c.impacto_sistema)}</p>
+  </div>` : ''}
+
+  <!-- Code blocks -->
+  <div style="padding:16px 24px;border-bottom:1px solid #f3f4f6;background:#111827">
+    <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">Blocos de Código (clique para expandir)</p>
+    ${codesHtml}
+  </div>
+
+  <!-- Risk + tests -->
+  <div style="display:grid;grid-template-columns:1fr 1fr">
+    <div style="padding:16px 24px;background:${riskBg(c.risco)};border-right:1px solid #f3f4f6">
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:${riskColor(c.risco)};text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">⚠ Risco ${c.risco} — Justificativa</p>
+      <p style="margin:0;font-size:13px;color:${riskColor(c.risco)};line-height:1.65;font-family:Inter,sans-serif">${escapeHtmlDoc(c.risco_justificativa ?? '')}</p>
+      ${atencaoList ? `<ul style="margin:10px 0 0;padding-left:16px">${atencaoList}</ul>` : ''}
+    </div>
+    <div style="padding:16px 24px">
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">✅ Testes obrigatórios antes do deploy</p>
+      ${testList ? `<ul style="margin:0;padding-left:16px">${testList}</ul>` : '<p style="font-size:13px;color:#9ca3af;margin:0">Nenhum teste específico identificado.</p>'}
+    </div>
+  </div>
+
+</div>`;
+  }).join('\n');
+
+  // Per-customization cards with code
+  const customCards = (json.customizacoes_detalhadas ?? []).map((c) => {
+    const seg = empresaSegs.find((s) => s.blockName === c.nome);
+    const classBadges: Record<string, { bg: string; color: string }> = {
+      fiscal:     { bg: '#fef3c7', color: '#92400e' },
+      integracao: { bg: '#ede9fe', color: '#5b21b6' },
+      relatorio:  { bg: '#e0f2fe', color: '#0369a1' },
+      validacao:  { bg: '#d1fae5', color: '#065f46' },
+      outro:      { bg: '#f3f4f6', color: '#374151' },
+    };
+    const cls = classBadges[c.classificacao ?? 'outro'] ?? classBadges['outro']!;
+
+    return `<div style="background:#fff;border-radius:10px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:14px">
+  <div style="background:linear-gradient(135deg,#14532d,#16a34a);padding:12px 20px;display:flex;align-items:center;justify-content:space-between">
+    <h4 style="margin:0;font-size:14px;font-weight:700;color:#fff;font-family:'Courier New',monospace">${escapeHtmlDoc(c.nome)}</h4>
+    <span style="background:${cls.bg};color:${cls.color};padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;font-family:Inter,sans-serif">${escapeHtmlDoc(c.classificacao ?? 'outro')}</span>
+  </div>
+  <div style="padding:14px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px;border-bottom:1px solid #f3f4f6">
+    <div>
+      <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">O que esta função faz</p>
+      <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;font-family:Inter,sans-serif">${escapeHtmlDoc(c.descricao ?? '')}</p>
+    </div>
+    <div>
+      <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">Natureza da customização</p>
+      <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;font-family:Inter,sans-serif">${escapeHtmlDoc(c.natureza_customizacao ?? '')}</p>
+    </div>
+  </div>
+  ${c.impacto_negocial ? `<div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0">
+    <p style="margin:0;font-size:12.5px;color:#166534;font-family:Inter,sans-serif"><strong>Impacto negocial:</strong> ${escapeHtmlDoc(c.impacto_negocial)}</p>
+  </div>` : ''}
+  ${c.risco_proxima_atualizacao ? `<div style="padding:8px 20px;background:#fffbeb;border-bottom:1px solid #fde68a">
+    <p style="margin:0;font-size:12px;color:#92400e;font-family:Inter,sans-serif"><strong>Risco na próxima atualização TOTVS:</strong> ${escapeHtmlDoc(c.risco_proxima_atualizacao)}</p>
+  </div>` : ''}
+  ${seg ? `<div style="padding:10px 20px;background:#111827">${codeBlock('Ver código da customização', '#374151', '#51cf66', seg.content)}</div>` : ''}
+</div>`;
+  }).join('\n');
+
+  const recsHtml   = (json.recomendacoes ?? []).map((r, i) =>
+    `<li style="padding:9px 0;font-size:14px;color:#374151;line-height:1.65;font-family:Inter,sans-serif;border-bottom:1px solid #f3f4f6"><strong style="color:#374151">${i + 1}.</strong> ${escapeHtmlDoc(r)}</li>`,
+  ).join('\n');
+
+  const testPlanHtml = (json.plano_testes ?? []).map((t) =>
+    `<li style="padding:7px 0;font-size:13.5px;color:#374151;line-height:1.6;font-family:Inter,sans-serif;border-bottom:1px solid #f3f4f6">☐ ${escapeHtmlDoc(t)}</li>`,
   ).join('\n');
 
   return `<!DOCTYPE html>
@@ -317,71 +433,85 @@ function buildAnaliseHtml(
 <head>
 <meta charset="UTF-8">
 <title>Análise IA — ${escapeHtmlDoc(fonteNome)} — ${escapeHtmlDoc(empresaNome)}</title>
+<style>
+*{box-sizing:border-box}
+details>summary{list-style:none}
+details>summary::-webkit-details-marker{display:none}
+details[open]>summary{border-radius:6px 6px 0 0!important}
+details>summary::before{content:'▶ ';font-size:10px;opacity:.7;transition:transform .2s}
+details[open]>summary::before{content:'▼ '}
+body{margin:0;padding:0;background:#f0f4ff}
+</style>
 </head>
-<body style="margin:0;padding:0;background:#f5f7ff;font-family:Inter,sans-serif">
+<body>
 
-<div style="background:linear-gradient(135deg,#0f1d3a,#1e3a6e);padding:28px 40px 24px;color:#fff">
-  <div style="max-width:960px;margin:0 auto">
-    <p style="margin:0 0 4px;font-size:11px;font-weight:600;opacity:.5;text-transform:uppercase;letter-spacing:.08em">Merge Agent · Análise Técnica</p>
-    <h1 style="margin:0 0 8px;font-size:26px;font-weight:800">${escapeHtmlDoc(fonteNome)}</h1>
-    <p style="margin:0;font-size:14px;opacity:.7">Empresa: <strong style="opacity:1">${escapeHtmlDoc(empresaNome)}</strong> &nbsp;·&nbsp; ${escapeHtmlDoc(dataStr)}</p>
+<!-- Header -->
+<div style="background:linear-gradient(135deg,#0f1d3a,#1e3a6e);padding:32px 40px 28px;color:#fff">
+  <div style="max-width:980px;margin:0 auto">
+    <p style="margin:0 0 5px;font-size:10px;font-weight:700;opacity:.45;text-transform:uppercase;letter-spacing:.1em;font-family:Inter,sans-serif">Merge Agent · Análise Técnica Completa</p>
+    <h1 style="margin:0 0 8px;font-size:28px;font-weight:800;font-family:Inter,sans-serif">${escapeHtmlDoc(fonteNome)}</h1>
+    <p style="margin:0;font-size:14px;opacity:.65;font-family:Inter,sans-serif">Empresa: <strong style="opacity:1">${escapeHtmlDoc(empresaNome)}</strong> &nbsp;·&nbsp; ${escapeHtmlDoc(dataStr)}</p>
   </div>
 </div>
 
-<div style="max-width:960px;margin:0 auto;padding:28px 40px">
+<div style="max-width:980px;margin:0 auto;padding:32px 40px">
+
+  <!-- Visão geral do arquivo -->
+  ${json.visao_geral_arquivo ? `<div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:20px 28px;margin-bottom:24px;box-shadow:0 1px 6px rgba(0,0,0,.05);border-left:4px solid #2563eb">
+    <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.06em;font-family:Inter,sans-serif">📁 Sobre o arquivo ${escapeHtmlDoc(fonteNome)}</p>
+    <p style="margin:0;font-size:14px;color:#374151;line-height:1.75;font-family:Inter,sans-serif">${escapeHtmlDoc(json.visao_geral_arquivo)}</p>
+  </div>` : ''}
 
   <!-- Stats -->
   <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:28px">
-    ${statsCard('Blocos inalterados', stats.igual, '#f8f9fa', '#dee2e6', '#495057')}
-    ${statsCard('Atualiz. TOTVS', stats.totvs_update, '#cce5ff', '#4dabf7', '#003d8a')}
-    ${statsCard('Customiz. empresa', stats.empresa, '#d3f9d8', '#51cf66', '#1a5928')}
-    ${statsCard('Conflitos resolvidos', stats.conflito, '#ffe3e3', '#ff6b6b', '#7d1313')}
-    ${statsCard('Novos blocos TOTVS', stats.novo_totvs, '#e5dbff', '#845ef7', '#3b0082')}
-    ${statsCard('Removidos TOTVS', stats.removido, '#ffe8cc', '#fd7e14', '#7d3500')}
+    ${statCard('Inalterados', stats.igual, '#f8f9fa', '#dee2e6', '#495057')}
+    ${statCard('Atualizações TOTVS', stats.totvs_update, '#cce5ff', '#4dabf7', '#003d8a')}
+    ${statCard('Customizações empresa', stats.empresa, '#d3f9d8', '#51cf66', '#1a5928')}
+    ${statCard('Conflitos resolvidos', stats.conflito, '#ffe3e3', '#ff6b6b', '#7d1313')}
+    ${statCard('Novos blocos TOTVS', stats.novo_totvs, '#e5dbff', '#845ef7', '#3b0082')}
+    ${statCard('Removidos TOTVS', stats.removido, '#ffe8cc', '#fd7e14', '#7d3500')}
   </div>
 
   <!-- Resumo executivo -->
   <div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:24px 28px;margin-bottom:28px;box-shadow:0 1px 6px rgba(0,0,0,.05)">
-    <h2 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#0f1d3a;display:flex;align-items:center;gap:8px">
-      <svg width="16" height="16" fill="none" stroke="#2563eb" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z"/></svg>
-      Resumo Executivo
-    </h2>
-    <div style="font-size:14px;color:#374151;line-height:1.75;white-space:pre-wrap">${escapeHtmlDoc(json.resumo_executivo)}</div>
+    <h2 style="margin:0 0 14px;font-size:16px;font-weight:700;color:#0f1d3a;font-family:Inter,sans-serif">📋 Resumo Executivo</h2>
+    <div style="font-size:14px;color:#374151;line-height:1.8;white-space:pre-wrap;font-family:Inter,sans-serif">${escapeHtmlDoc(json.resumo_executivo ?? '')}</div>
   </div>
 
-  <!-- Conflitos -->
-  ${stats.conflito > 0 ? `
-  <div style="margin-bottom:28px">
-    <h2 style="margin:0 0 16px;font-size:15px;font-weight:700;color:#0f1d3a;display:flex;align-items:center;gap:8px">
-      <svg width="16" height="16" fill="none" stroke="#dc2626" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
-      Análise de Conflitos (${stats.conflito})
+  <!-- Conflict section -->
+  ${stats.conflito > 0 ? `<div style="margin-bottom:32px">
+    <h2 style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0f1d3a;font-family:Inter,sans-serif;display:flex;align-items:center;gap:8px">
+      🔴 Análise Detalhada de Conflitos (${stats.conflito})
     </h2>
     ${conflictsHtml}
   </div>` : ''}
 
-  <!-- Customizações -->
-  ${stats.empresa > 0 ? `
-  <div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:24px 28px;margin-bottom:28px;box-shadow:0 1px 6px rgba(0,0,0,.05)">
-    <h2 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#0f1d3a;display:flex;align-items:center;gap:8px">
-      <svg width="16" height="16" fill="none" stroke="#16a34a" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg>
-      Customizações da Empresa (${stats.empresa})
-    </h2>
-    <p style="margin:0;font-size:14px;color:#374151;line-height:1.75;white-space:pre-wrap">${escapeHtmlDoc(json.customizacoes_resumo)}</p>
+  <!-- Company customizations -->
+  ${stats.empresa > 0 ? `<div style="margin-bottom:32px">
+    <h2 style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0f1d3a;font-family:Inter,sans-serif">🟢 Customizações da Empresa (${stats.empresa})</h2>
+    ${customCards || `<p style="font-size:14px;color:#6b7280;font-family:Inter,sans-serif">${stats.empresa} customizações identificadas e preservadas automaticamente no merge.</p>`}
   </div>` : ''}
 
-  <!-- Recomendações -->
-  <div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:24px 28px;margin-bottom:28px;box-shadow:0 1px 6px rgba(0,0,0,.05)">
-    <h2 style="margin:0 0 14px;font-size:15px;font-weight:700;color:#0f1d3a;display:flex;align-items:center;gap:8px">
-      <svg width="16" height="16" fill="none" stroke="#7c3aed" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"/></svg>
-      Recomendações para o Time
-    </h2>
-    <ol style="margin:0;padding-left:20px;list-style:decimal">
-      ${recsHtml}
-    </ol>
+  <!-- Recommendations -->
+  <div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:24px 28px;margin-bottom:24px;box-shadow:0 1px 6px rgba(0,0,0,.05)">
+    <h2 style="margin:0 0 14px;font-size:16px;font-weight:700;color:#0f1d3a;font-family:Inter,sans-serif">⚡ Recomendações para o Time</h2>
+    <ol style="margin:0;padding:0;list-style:none">${recsHtml}</ol>
   </div>
 
-  <p style="text-align:center;font-size:11px;color:#9ca3af;margin-top:8px">
-    Gerado automaticamente pelo Merge Agent · ${escapeHtmlDoc(dataStr)}
+  <!-- Test plan -->
+  ${testPlanHtml ? `<div style="background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:24px 28px;margin-bottom:24px;box-shadow:0 1px 6px rgba(0,0,0,.05)">
+    <h2 style="margin:0 0 14px;font-size:16px;font-weight:700;color:#0f1d3a;font-family:Inter,sans-serif">✅ Plano de Testes</h2>
+    <ul style="margin:0;padding:0;list-style:none">${testPlanHtml}</ul>
+  </div>` : ''}
+
+  <!-- Conclusion -->
+  ${json.conclusao ? `<div style="background:linear-gradient(135deg,#0f1d3a,#1e3a6e);border-radius:12px;padding:24px 28px;margin-bottom:16px">
+    <h2 style="margin:0 0 12px;font-size:15px;font-weight:700;color:#93c5fd;font-family:Inter,sans-serif">Conclusão</h2>
+    <p style="margin:0;font-size:14px;color:#e2e8f0;line-height:1.8;font-family:Inter,sans-serif">${escapeHtmlDoc(json.conclusao)}</p>
+  </div>` : ''}
+
+  <p style="text-align:center;font-size:11px;color:#9ca3af;font-family:Inter,sans-serif;margin-top:8px">
+    Gerado pelo Merge Agent com análise IA · ${escapeHtmlDoc(dataStr)}
   </p>
 </div>
 </body>
@@ -398,118 +528,171 @@ async function generateMergeAnalysis(
 ): Promise<string> {
   const dataStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  const fallbackJson: MergeAnalysisJson = {
+  const empresaSegs: EmpresaSegData[] = segments
+    .filter((s) => s.kind === 'resolved' && s.category === 'empresa' && s.content)
+    .map((s) => ({ blockName: s.blockName, content: s.kind === 'resolved' ? s.content : '' }));
+
+  const makeFallback = (): MergeAnalysisJson => ({
+    visao_geral_arquivo: `Arquivo AdvPL/TLPP ${fonteNome} processado pelo merge.`,
     resumo_executivo: 'Análise automática não pôde ser gerada. Verifique manualmente os conflitos no relatório de código.',
     conflitos: conflictSegs.map((s) => ({
       nome: s.blockName,
-      o_que_totvs_mudou: 'Não analisado.',
-      o_que_empresa_customizou: 'Não analisado.',
-      por_que_conflito: 'Ambos TOTVS e empresa modificaram o mesmo bloco de forma incompatível.',
-      como_resolvido: 'Resolvido automaticamente — verificação manual recomendada.',
+      descricao_funcao: 'Não analisado.',
+      analise_mudanca_totvs: 'Não analisado.',
+      analise_customizacao_empresa: 'Não analisado.',
+      analise_conflito: 'Ambos TOTVS e empresa modificaram o mesmo bloco de forma incompatível.',
+      analise_resolucao: 'Resolvido automaticamente — verificação manual recomendada.',
+      impacto_sistema: '',
+      referencias_totvs: '',
       risco: 'médio' as const,
-      risco_explicacao: 'Revisão manual obrigatória.',
+      risco_justificativa: 'Revisão manual obrigatória.',
+      testes_obrigatorios: ['Revisar o bloco manualmente e testar o fluxo completo.'],
+      pontos_atencao: [],
     })),
-    customizacoes_resumo: `${stats.empresa} customizações foram identificadas e preservadas no merge.`,
+    customizacoes_detalhadas: empresaSegs.map((s) => ({
+      nome: s.blockName,
+      descricao: 'Customização da empresa preservada no merge.',
+      natureza_customizacao: 'Não analisado.',
+      impacto_negocial: '',
+      classificacao: 'outro',
+      risco_proxima_atualizacao: '',
+    })),
     recomendacoes: ['Revisar manualmente todos os conflitos antes de implantar em produção.'],
-  };
+    plano_testes: [],
+    conclusao: '',
+  });
 
   try {
     const linhas: string[] = [
-      'Você é um especialista em AdvPL/TLPP e engenharia de software.',
-      'Analise o merge abaixo e gere um relatório técnico DETALHADO em português (pt-BR).',
+      'Você é um especialista sênior em AdvPL/TLPP, ERP TOTVS Protheus e engenharia de software fiscal/contábil.',
+      'Analise o merge abaixo e produza um RELATÓRIO TÉCNICO COMPLETO em português (pt-BR).',
+      'Seja ESPECÍFICO e CONCRETO: cite nomes de variáveis, parâmetros, funções chamadas, lógicas de negócio.',
+      'Quando identificar padrões TOTVS (MVC, Genexus, integração SPED/NF-e, TSS, RTC, etc.), cite-os.',
       '',
-      `ARQUIVO: ${fonteNome}`,
+      `ARQUIVO ANALISADO: ${fonteNome}`,
       `EMPRESA: ${empresaNome}`,
-      `DATA: ${dataStr}`,
+      `DATA DO MERGE: ${dataStr}`,
       '',
-      'ESTATÍSTICAS DO MERGE:',
-      `- ${stats.igual} blocos inalterados (empresa e TOTVS idênticos)`,
-      `- ${stats.totvs_update} atualizações automáticas da TOTVS (sem customização da empresa, aplicadas sem conflito)`,
-      `- ${stats.empresa} customizações da empresa preservadas (empresa modificou, TOTVS não mudou)`,
-      `- ${stats.conflito} conflitos resolvidos por IA (ambos TOTVS e empresa modificaram o mesmo bloco)`,
-      `- ${stats.novo_totvs} blocos novos adicionados pela TOTVS`,
-      `- ${stats.removido} blocos removidos pela TOTVS`,
+      '═══════════════════ ESTATÍSTICAS ═══════════════════',
+      `  ${stats.igual} blocos INALTERADOS — empresa e TOTVS mantiveram o mesmo código`,
+      `  ${stats.totvs_update} ATUALIZAÇÕES TOTVS — aplicadas automaticamente sem conflito`,
+      `  ${stats.empresa} CUSTOMIZAÇÕES DA EMPRESA — preservadas (TOTVS não tocou, empresa modificou)`,
+      `  ${stats.conflito} CONFLITOS RESOLVIDOS por IA — ambos mudaram o mesmo bloco`,
+      `  ${stats.novo_totvs} NOVOS BLOCOS TOTVS — adicionados pela TOTVS nesta versão`,
+      `  ${stats.removido} REMOVIDOS PELO TOTVS — empresa pode ter perdido funcionalidade`,
       '',
     ];
 
+    // Conflict blocks with FULL code
     if (conflictSegs.length > 0) {
-      linhas.push(`=== CONFLITOS PARA ANÁLISE DETALHADA (${conflictSegs.length}) ===`);
+      linhas.push('═══════════════════ CONFLITOS PARA ANÁLISE DETALHADA ═══════════════════');
       linhas.push('');
       for (let i = 0; i < conflictSegs.length; i++) {
         const seg = conflictSegs[i]!;
         const resolved = resolvedMap.get(seg.blockName) ?? '';
-        linhas.push(`--- CONFLITO ${i + 1}: ${seg.blockName} ---`);
+        linhas.push(`┌─────────────────────────────────────────┐`);
+        linhas.push(`  CONFLITO ${i + 1}/${conflictSegs.length}: ${seg.blockName}`);
+        linhas.push(`└─────────────────────────────────────────┘`);
         linhas.push('');
+
         if (seg.ancestorContent) {
-          linhas.push('VERSÃO BASE TOTVS (ancestor — ponto de partida comum):');
-          linhas.push('```');
-          linhas.push(seg.ancestorContent.slice(0, 1800));
-          if (seg.ancestorContent.length > 1800) linhas.push('[... truncado ...]');
+          linhas.push('▸ VERSÃO BASE TOTVS (ancestor — ponto de partida, ANTES das mudanças de qualquer lado):');
+          linhas.push('```advpl');
+          linhas.push(seg.ancestorContent.slice(0, 2500));
+          if (seg.ancestorContent.length > 2500) linhas.push('\n[... código continua — truncado para análise ...]');
           linhas.push('```');
           linhas.push('');
         }
-        if (seg.totvsContent) {
-          linhas.push('NOVA VERSÃO TOTVS (o que a TOTVS atualizou):');
-          linhas.push('```');
-          linhas.push(seg.totvsContent.slice(0, 1800));
-          if (seg.totvsContent.length > 1800) linhas.push('[... truncado ...]');
-          linhas.push('```');
-        } else {
-          linhas.push('NOVA VERSÃO TOTVS: BLOCO REMOVIDO pela TOTVS nesta versão.');
-        }
-        linhas.push('');
-        linhas.push('VERSÃO DA EMPRESA (o que a empresa havia customizado):');
-        if (seg.empresaContent) {
-          linhas.push('```');
-          linhas.push(seg.empresaContent.slice(0, 1800));
-          if (seg.empresaContent.length > 1800) linhas.push('[... truncado ...]');
+
+        if (seg.totvsContent !== null) {
+          linhas.push('▸ NOVA VERSÃO TOTVS (o que a TOTVS modificou neste release):');
+          linhas.push('```advpl');
+          linhas.push(seg.totvsContent.slice(0, 2500));
+          if (seg.totvsContent.length > 2500) linhas.push('\n[... código continua — truncado para análise ...]');
           linhas.push('```');
         } else {
-          linhas.push('A empresa havia removido este bloco.');
+          linhas.push('▸ NOVA VERSÃO TOTVS: ⚠ BLOCO REMOVIDO — a TOTVS deletou esta função/bloco nesta versão.');
         }
         linhas.push('');
+
+        linhas.push('▸ VERSÃO DA EMPRESA (customização que a empresa havia aplicado):');
+        if (seg.empresaContent !== null) {
+          linhas.push('```advpl');
+          linhas.push(seg.empresaContent.slice(0, 2500));
+          if (seg.empresaContent.length > 2500) linhas.push('\n[... código continua — truncado para análise ...]');
+          linhas.push('```');
+        } else {
+          linhas.push('⚠ A empresa havia REMOVIDO este bloco da sua versão customizada.');
+        }
+        linhas.push('');
+
         if (resolved) {
-          linhas.push('RESOLUÇÃO DA IA (código final incorporado ao merge):');
-          linhas.push('```');
-          linhas.push(resolved.slice(0, 1800));
-          if (resolved.length > 1800) linhas.push('[... truncado ...]');
+          linhas.push('▸ RESOLUÇÃO DA IA (código final gerado e incorporado ao merge):');
+          linhas.push('```advpl');
+          linhas.push(resolved.slice(0, 2500));
+          if (resolved.length > 2500) linhas.push('\n[... código continua — truncado para análise ...]');
           linhas.push('```');
         }
+        linhas.push('');
+        linhas.push('─────────────────────────────────────────────────────');
         linhas.push('');
       }
     }
 
-    const empresaBlocks = segments
-      .filter((s) => s.kind === 'resolved' && s.category === 'empresa')
-      .map((s) => s.blockName)
-      .join(', ');
-    if (empresaBlocks) {
-      linhas.push('=== CUSTOMIZAÇÕES DA EMPRESA (sem conflito, preservadas automaticamente) ===');
-      linhas.push(empresaBlocks);
+    // Company customization blocks with code
+    if (empresaSegs.length > 0) {
+      linhas.push('═══════════════════ CUSTOMIZAÇÕES DA EMPRESA (sem conflito) ═══════════════════');
+      linhas.push('Estas funções foram modificadas pela empresa e não foram tocadas pela TOTVS neste release.');
       linhas.push('');
+      for (const seg of empresaSegs.slice(0, 12)) {
+        linhas.push(`▸ ${seg.blockName}:`);
+        linhas.push('```advpl');
+        linhas.push(seg.content.slice(0, 1200));
+        if (seg.content.length > 1200) linhas.push('\n[... truncado ...]');
+        linhas.push('```');
+        linhas.push('');
+      }
+      if (empresaSegs.length > 12) {
+        linhas.push(`... e mais ${empresaSegs.length - 12} customizações: ${empresaSegs.slice(12).map((s) => s.blockName).join(', ')}`);
+        linhas.push('');
+      }
     }
 
-    linhas.push('Responda APENAS com um JSON válido (sem markdown, sem texto antes ou depois):');
-    linhas.push('{');
-    linhas.push('  "resumo_executivo": "3-4 parágrafos técnicos sobre o merge: contexto geral, o que foi feito, riscos globais, recomendação de validação",');
-    linhas.push('  "conflitos": [');
-    linhas.push('    {');
-    linhas.push('      "nome": "nome exato do bloco",');
-    linhas.push('      "o_que_totvs_mudou": "explicação técnica detalhada do que a TOTVS alterou neste bloco",');
-    linhas.push('      "o_que_empresa_customizou": "o que a empresa havia implementado como customização",');
-    linhas.push('      "por_que_conflito": "por que as mudanças da TOTVS e da empresa colidiram especificamente",');
-    linhas.push('      "como_resolvido": "como a IA resolveu o conflito, qual estratégia foi usada, o que foi preservado de cada lado",');
-    linhas.push('      "risco": "baixo ou médio ou alto",');
-    linhas.push('      "risco_explicacao": "o que deve ser testado, qual o impacto desta resolução em produção"');
-    linhas.push('    }');
-    linhas.push('  ],');
-    linhas.push('  "customizacoes_resumo": "parágrafo explicando o perfil geral de customizações da empresa e o que foi preservado",');
-    linhas.push('  "recomendacoes": ["lista de ações concretas para o time validar antes de deploy"]');
-    linhas.push('}');
+    linhas.push('═══════════════════ INSTRUÇÕES PARA SUA RESPOSTA ═══════════════════');
+    linhas.push('Responda APENAS com JSON válido (sem markdown antes/depois). Estrutura:');
+    linhas.push(JSON.stringify({
+      visao_geral_arquivo: 'String: descreva o papel deste arquivo no ecossistema TOTVS Protheus. Qual módulo? Qual integração? (NF-e, SPED, TSS, financeiro, etc.)',
+      resumo_executivo: 'String: 4-6 parágrafos. Contexto geral do merge, quais foram as principais mudanças da TOTVS neste release, quais as customizações mais importantes da empresa, avaliação de risco geral, recomendação de validação.',
+      conflitos: conflictSegs.map((s) => ({
+        nome: s.blockName,
+        descricao_funcao: 'O que esta função faz no sistema, qual seu papel técnico e de negócio',
+        analise_mudanca_totvs: 'DETALHE o que a TOTVS mudou: quais variáveis, chamadas, lógicas, parâmetros foram adicionados/removidos/alterados. Se possível, mencione o motivo (nova legislação, correção de bug, nova integração, etc.)',
+        analise_customizacao_empresa: 'DETALHE o que a empresa customizou: qual lógica de negócio foi adicionada, quais campos ou variáveis específicos da empresa, qual era o propósito desta customização',
+        analise_conflito: 'EXPLIQUE concretamente por que conflitou: quais trechos específicos de código colidiram, qual é a incompatibilidade fundamental entre a mudança TOTVS e a customização da empresa',
+        analise_resolucao: 'DETALHE como a IA resolveu: qual estratégia foi usada, o que foi preservado de cada lado (TOTVS e empresa), quais tradeoffs foram feitos, se alguma customização pode ter sido parcialmente perdida',
+        impacto_sistema: 'Quais outros processos/módulos do ERP são afetados por esta função. Impactos fiscais, contábeis, de integração.',
+        referencias_totvs: 'Se aplicável: padrões TOTVS conhecidos usados (MVC, query SQL padrão, integração SEF, TSS, TEC, RTC), ou fontes relacionados onde funções similares existem (ex: "similar ao MATA460.PRW")',
+        risco: 'baixo|médio|alto',
+        risco_justificativa: 'Por que este nível de risco. O que especificamente pode falhar. Cenários de erro.',
+        testes_obrigatorios: ['Cenário específico 1 para testar', 'Cenário específico 2', 'etc.'],
+        pontos_atencao: ['Ponto específico de atenção 1', 'etc.'],
+      })),
+      customizacoes_detalhadas: empresaSegs.slice(0, 14).map((s) => ({
+        nome: s.blockName,
+        descricao: 'O que esta função faz',
+        natureza_customizacao: 'O que especificamente a empresa customizou e por que (integração, regra de negócio, validação, etc.)',
+        impacto_negocial: 'Qual processo de negócio depende desta customização',
+        classificacao: 'fiscal|integracao|relatorio|validacao|outro',
+        risco_proxima_atualizacao: 'Qual a probabilidade e impacto desta customização conflitar na próxima atualização TOTVS',
+      })),
+      recomendacoes: ['Ação concreta 1 ordenada por prioridade', 'Ação 2', '...'],
+      plano_testes: ['Teste específico 1 com cenário concreto', 'Teste 2', '...'],
+      conclusao: 'Parágrafo final: avaliação geral do merge, confiança na resolução, recomendação para o time.',
+    }, null, 2));
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      max_tokens: 8000,
       messages: [{ role: 'user', content: linhas.join('\n') }],
     });
 
@@ -518,10 +701,10 @@ async function generateMergeAnalysis(
     const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
     const parsed = JSON.parse(cleaned) as MergeAnalysisJson;
 
-    return buildAnaliseHtml(parsed, stats, empresaNome, fonteNome, dataStr);
+    return buildAnaliseHtml(parsed, conflictSegs, resolvedMap, empresaSegs, stats, empresaNome, fonteNome, dataStr);
   } catch (err) {
-    logger.warn({ err }, 'generateMergeAnalysis: falha ao gerar análise IA — usando fallback');
-    return buildAnaliseHtml(fallbackJson, stats, empresaNome, fonteNome, dataStr);
+    logger.warn({ err }, 'generateMergeAnalysis: falha — usando fallback');
+    return buildAnaliseHtml(makeFallback(), conflictSegs, resolvedMap, empresaSegs, stats, empresaNome, fonteNome, dataStr);
   }
 }
 
